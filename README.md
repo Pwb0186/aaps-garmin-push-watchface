@@ -5,7 +5,8 @@
 
 A minimal Connect IQ watch face that shows AndroidAPS (AAPS) data and gets it with
 **V2 Push-to-Pull**: AAPS sends a tiny "new data" signal to the watch, and the watch
-fetches the data itself over HTTP. Use it as a starting point for your own watch face.
+fetches the data itself over HTTP. Use it as a starting point for your own watch face, or
+copy a ready-built `.prg` from the `prg/` folder to your watch to try it.
 
 It shows BG with delta and trend, age of the reading, temporary target, IOB, COB,
 basal / temp basal (LOOP OFF when the loop is off), time/date, a 2-hour BG graph, and
@@ -34,8 +35,7 @@ the same code fits every watch in the manifest (240 to 416 px).
 > The fields an AAPS does not send are simply missing from the answer, and the watch face
 > copes with that - nothing breaks.
 
-`Shared/` is based on Robert Buessow's [AAPS Glucose Applications](https://github.com/buessow/garmin)
-(MIT license, see `LICENSE`).
+`Shared/` is based on Robert Buessow's [AAPS Glucose Applications](https://github.com/buessow/garmin).
 
 ---
 
@@ -66,7 +66,7 @@ AAPS (phone)                                     Watch
     |                                                |  App.onBackgroundData() -> redraw
 ```
 
-- **AAPS pushes** on a new BG reading, and on boluses, carbs, temp basal, extended bolus,
+- **AAPS pushes** on a new BG reading, and on boluses, carbs, temp basal,
   temp target and running-mode changes (debounced 3.5 s, so one loop cycle gives one
   push). The push is sent at once. If AAPS has no COB value yet (for example just after
   AAPS starts, before its first calculation), it leaves `carbsOnBoard` out of the answer
