@@ -61,7 +61,9 @@ AAPS (phone)                                     Watch
     |  new BG, or the loop changed something         |
     |--- CIQ message {key, "updateWatch"} ---------->|  wakes the background process
     |                                                |  GlucoseServiceDelegate.onPhoneAppMessage()
-    |<-- HTTP GET 127.0.0.1:28891/get?appId=... -----|  (routed by Garmin Connect on the phone)
+    |                                                |  (routed by Garmin Connect on the phone)
+    |<-- HTTP GET 127.0.0.1:28891/get?appId=... -----|  
+    |                                                |
     |--- JSON: BG history, IOB, COB, TBR, TT ... --->|
     |                                                |  App.onBackgroundData() -> redraw
 ```
