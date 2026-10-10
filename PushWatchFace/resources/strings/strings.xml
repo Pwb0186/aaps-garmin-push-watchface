@@ -1,0 +1,13 @@
+﻿<strings>
+    <string id="AppName">AAPS Push</string>
+    <string id="SettingsTitle">AAPS Push</string>
+    <string id="LowBgMarkTitle">Low BG</string>
+    <string id="HighBgMarkTitle">High BG</string>
+    <string id="ShowHeartRateTitle">Show heart rate</string>
+    <string id="VisibleLabel">visible</string>
+    <string id="SendStepsTitle">Send steps to AAPS</string>
+    <string id="SendHeartRateTitle">Send heart rate to AAPS</string>
+    <string id="SendLabel">sent</string>
+    <string id="PauseStepsTitle">Pause steps in activity</string>
+    <string id="PauseLabel">paused</string>
+</strings>

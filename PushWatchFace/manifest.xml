@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+    <!-- KEEP IN SYNC with PushWatchFaceApp.mc Properties.setValue("AppId", ...) -->
+    <iq:application entry="PushWatchFaceApp" id="D0B1C2D3E4F54A6B8C7D9E0F1A2B3C4D" minSdkVersion="3.3.1" launcherIcon="@Drawables.LauncherIcon" name="@Strings.AppName" type="watchface" version="1.0.0">
+        <iq:products>
+            <iq:product id="enduro"/>
+            <iq:product id="epix2"/>
+            <iq:product id="epix2pro47mm"/>
+            <iq:product id="fenix6"/>
+            <iq:product id="fenix6pro"/>
+            <iq:product id="fenix6spro"/>
+            <iq:product id="fenix7"/>
+            <iq:product id="fenix7x"/>
+            <iq:product id="fr245"/>
+            <iq:product id="fr245m"/>
+            <iq:product id="fr255"/>
+            <iq:product id="fr255m"/>
+            <iq:product id="fr265"/>
+            <iq:product id="fr265s"/>
+            <iq:product id="fr745"/>
+            <iq:product id="fr945"/>
+            <iq:product id="fr955"/>
+        </iq:products>
+        <iq:permissions>
+            <!-- Push from AAPS (phone app messages) and the watch's own fallback fetch -->
+            <iq:uses-permission id="Background"/>
+            <!-- HTTP requests to AAPS on the phone -->
+            <iq:uses-permission id="Communications"/>
+            <!-- Heart rate history, only needed to send heart rate to AAPS -->
+            <iq:uses-permission id="SensorHistory"/>
+        </iq:permissions>
+        <iq:languages>
+            <iq:language>eng</iq:language>
+        </iq:languages>
+        <iq:barrels/>
+    </iq:application>
+</iq:manifest>

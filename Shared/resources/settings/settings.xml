@@ -1,0 +1,18 @@
+<settings>
+  <setting propertyKey="@Properties.GlucoseValueFrequencySec" title="@Strings.GlucoseValueFrequencySecTitle">
+    <settingConfig type="numeric"  min="0" readonly="true" />
+  </setting>
+  <setting propertyKey="@Properties.GlucoseValueFrequencyOverrideSec" title="@Strings.GlucoseValueFrequencyOverrideSecTitle">
+    <settingConfig type="numeric"  min="0"/>
+  </setting>
+  <setting propertyKey="@Properties.GlucoseValueWaitSec" title="@Strings.GlucoseValueWaitSecTitle">
+    <settingConfig type="numeric"  min="0"/>
+  </setting>
+  <setting propertyKey="@Properties.AAPSKey" title="@Strings.AAPSKeyTitle">
+    <settingConfig type="alphaNumeric" />
+  </setting>
+  <setting propertyKey="@Properties.ShowTotalRemainingInsulin" title="@Strings.ShowTotalRemainingInsulin">
+    <settingConfig type="boolean" />
+  </setting>
+
+</settings>

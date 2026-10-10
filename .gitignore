@@ -1,0 +1,14 @@
+# Build output
+bin/
+output/
+*.prg
+# ...except the ready-built ones to try the watch face
+!prg/*.prg
+# monkeyc's work folders, if a build writes them into prg/
+prg/*/
+*.iq
+
+# Developer keys - never commit
+*.der
+*.pem
+developer_key*
