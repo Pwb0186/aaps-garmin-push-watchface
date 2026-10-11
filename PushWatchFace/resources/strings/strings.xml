@@ -8,6 +8,7 @@
     <string id="SendStepsTitle">Send steps to AAPS</string>
     <string id="SendHeartRateTitle">Send heart rate to AAPS</string>
     <string id="SendLabel">sent</string>
+    <string id="PauseHrTitle">Pause heart rate in activity</string>
     <string id="PauseStepsTitle">Pause steps in activity</string>
     <string id="PauseLabel">paused</string>
 </strings>

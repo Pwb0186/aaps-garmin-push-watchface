@@ -37,15 +37,12 @@ using Toybox.WatchUi as Ui;
  * of digits and capitals: the font ascent less an estimate of the internal
  * leading, which Connect IQ does not report.
  *
- * Heart rate is sampled here and sent to AAPS by the background service
- * (property SendHeartRateToAaps, default off).
+ * Heart rate for AAPS is read by the background service (Shared
+ * GlucoseServiceDelegate), not here.
  */
 class PushWatchFaceView extends Ui.WatchFace {
   private static const TAG = "PushWatchFaceView";
   private const HR_SAMPLING_PERIOD_SEC = 300;
-  // Heart rate is sent to AAPS at most every 240 s (GlucoseServiceDelegate), so
-  // sampling it more often only costs Storage (flash) writes.
-  private const HR_SAMPLE_INTERVAL_SEC = 240;
 
   private const GRAY = 0xAAAAAA;
   private const IOB_COLOR = 0x67DFE8;
@@ -61,7 +58,6 @@ class PushWatchFaceView extends Ui.WatchFace {
 
   private var data as Shared.Data;
   private var graph as Shared.Graph?;
-  private var lastHrSampleSec as Number = 0;
 
   private var screenWidth as Number = 0;
   private var screenHeight as Number = 0;
@@ -336,14 +332,11 @@ class PushWatchFaceView extends Ui.WatchFace {
   }
 
   private function onUpdateImpl(dc as Gfx.Dc) as Void {
-    // Heart rate for AAPS, and the watch's own fallback fetch.
+    // The watch's own fallback fetch.
     // 65 s: this view has no onPartialUpdate, so outside the few seconds after a
     // wrist gesture onUpdate runs once a minute. With a shorter window the fetch was
     // only registered at the first update inside it - up to a minute late, which
     // matters when push is not working and the fallback is the only fetch.
-    if (Properties.getValue("SendHeartRateToAaps") == true) {
-      sampleHeartRate();
-    }
     BackgroundScheduler.schedule2(data.glucoseBuffer.getLastDateSec(), 65);
 
     dc.setColor(Gfx.COLOR_BLACK, Gfx.COLOR_BLACK);
@@ -735,45 +728,4 @@ class PushWatchFaceView extends Ui.WatchFace {
    * Stores the average heart rate of the last 5 minutes in Storage, where the
    * background service (GlucoseServiceDelegate) picks it up and sends it to AAPS.
    */
-  private function sampleHeartRate() as Void {
-    if (!(Toybox has :SensorHistory) || !(Toybox.SensorHistory has :getHeartRateHistory)) {
-      return;
-    }
-
-    var nowSec = Util.nowSec();
-    if (lastHrSampleSec > 0 && nowSec - lastHrSampleSec < HR_SAMPLE_INTERVAL_SEC) {
-      return;
-    }
-    lastHrSampleSec = nowSec;
-
-    try {
-      var history = SensorHistory.getHeartRateHistory({
-        :period => new TimeModule.Duration(HR_SAMPLING_PERIOD_SEC),
-        :order => SensorHistory.ORDER_OLDEST_FIRST
-      });
-      var sum = 0;
-      var count = 0;
-      if (history != null) {
-        for (var value = history.next(); value != null; value = history.next()) {
-          if (value.data == null) {
-            continue;
-          }
-          sum += value.data.toNumber();
-          count += 1;
-        }
-      }
-
-      if (count > 0) {
-        Toybox.Application.Storage.setValue("HeartRateStartSec", nowSec - HR_SAMPLING_PERIOD_SEC);
-        Toybox.Application.Storage.setValue("HeartRateLastSec", nowSec);
-        Toybox.Application.Storage.setValue("HeartRateAvg", sum / count);
-      } else {
-        Toybox.Application.Storage.setValue("HeartRateStartSec", 0);
-        Toybox.Application.Storage.setValue("HeartRateLastSec", 0);
-        Toybox.Application.Storage.setValue("HeartRateAvg", 0);
-      }
-    } catch (e) {
-      Log.e(TAG, "sample heart rate: " + e.getErrorMessage());
-    }
-  }
 }

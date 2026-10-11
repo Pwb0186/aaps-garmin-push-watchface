@@ -2,6 +2,7 @@
     <property id="LowBgMarkMgdl" type="number">74</property>
     <property id="HighBgMarkMgdl" type="number">180</property>
     <property id="SendHeartRateToAaps" type="boolean">false</property>
+    <property id="PauseHeartRateInActivity" type="boolean">true</property>
     <property id="SendStepsToAaps" type="boolean">false</property>
     <property id="PauseStepsInActivity" type="boolean">false</property>
     <property id="ShowHeartRate" type="boolean">true</property>

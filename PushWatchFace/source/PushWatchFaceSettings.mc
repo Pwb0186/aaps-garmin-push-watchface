@@ -56,6 +56,12 @@ class PushWatchFaceSettings {
         :menuSendHeartRate,
         Shared.Util.settingOn("SendHeartRateToAaps", false),
         {}));
+    menu.addItem(new Ui.ToggleMenuItem(
+        Rez.Strings.PauseHrTitle,
+        Rez.Strings.PauseLabel,
+        :menuPauseHeartRate,
+        Shared.Util.settingOn("PauseHeartRateInActivity", true),
+        {}));
   }
 
   function get() as [ Ui.Views, Ui.InputDelegates ] {
@@ -114,6 +120,10 @@ class PushWatchFaceSettings {
           return;
         case :menuSendHeartRate:
           Properties.setValue("SendHeartRateToAaps", (item as Ui.ToggleMenuItem).isEnabled());
+          Application.getApp().onSettingsChanged();
+          return;
+        case :menuPauseHeartRate:
+          Properties.setValue("PauseHeartRateInActivity", (item as Ui.ToggleMenuItem).isEnabled());
           Application.getApp().onSettingsChanged();
           return;
       }

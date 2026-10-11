@@ -17,6 +17,9 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
   // request that never reaches the phone does not use up the 4-minute throttle.
   private var sentStepsSec as Number? = null;
   private var sentHrSec as Number? = null;
+  private var sentHrEndSec as Number? = null;
+  // Longest heart rate period sent to AAPS (the watch face used 5 minutes before).
+  private static const HR_PERIOD_SEC = 300;
   private var staleMessageCount as Number = 0;
   // Diagnostics sent along with /get, so they show up in the phone's logcat
   // (AAPS logs the full request URL) - the watch's own log needs a USB cable.
@@ -164,8 +167,19 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
     }
   }
 
+  // Sends the heart rate since the last one AAPS accepted (at most the last 5 min) as
+  // "hr" (average), "hrStart" and "hrEnd" (epoch sec), at most every 4 minutes.
+  // Read here, just before the request, from the watch's heart rate history (about one
+  // sample a minute). The background process can read it - also while an activity
+  // runs, when the watch face itself does not run - so the value is fresh and
+  // hrStart follows on from the last hrEnd without overlap.
   private function populateHeartRateHistory(parameters as Dictionary<String, String>) as Void {
     if (!Util.settingOn("SendHeartRateToAaps", true)) {
+      return;
+    }
+    // No heart rate while an activity is running, unless the user turns this off: a data
+    // field in the activity (e.g. swissalpine's) usually sends it then. On by default.
+    if (Util.settingOn("PauseHeartRateInActivity", true) && isActivityRunning()) {
       return;
     }
     try {
@@ -175,22 +189,79 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
           Log.i(TAG, "Skipping HR, sent recently");
           return;
       }
-
-      var startSec = Toybox.Application.Storage.getValue("HeartRateStartSec");
-      var lastSec = Toybox.Application.Storage.getValue("HeartRateLastSec");
-      var avg = Toybox.Application.Storage.getValue("HeartRateAvg");
-
-      if (startSec != null && lastSec != null && avg != null &&
-          avg > 0 && nowSec - lastSec < 600) {
-        Log.i(TAG, "HR " + avg);
-        parameters["hr"] = avg.toString();
-        parameters["hrStart"] = startSec.toString();
-        parameters["hrEnd"] = lastSec.toString();
+      var fromSec = nowSec - HR_PERIOD_SEC;
+      var lastEnd = Toybox.Application.Storage.getValue("LastSentHrEndSec");
+      if (lastEnd instanceof Number && lastEnd > fromSec && lastEnd <= nowSec) {
+        fromSec = lastEnd as Number;
+      }
+      var hr = readHeartRate(fromSec);
+      if (hr != null) {
+        Log.i(TAG, "HR " + hr[0]);
+        parameters["hr"] = hr[0].toString();
+        parameters["hrStart"] = fromSec.toString();
+        parameters["hrEnd"] = hr[1].toString();
         sentHrSec = nowSec;
+        sentHrEndSec = hr[1];
       }
     } catch (e) {
-      e.printStackTrace();
+      Log.e(TAG, "populateHeartRateHistory err: " + (e == null ? "NULL" : e.getErrorMessage()));
     }
+  }
+
+  // Average heart rate of the samples after fromSec, and the time of the newest one:
+  // [average, newestSec], or null without samples (e.g. watch not worn). Uses
+  // SensorHistory, and ActivityMonitor's heart rate history if that is not available.
+  private function readHeartRate(fromSec as Number) as Array<Number>? {
+    var sum = 0;
+    var count = 0;
+    var newestSec = 0;
+    var done = false;
+    try {
+      if ((Toybox has :SensorHistory) && (Toybox.SensorHistory has :getHeartRateHistory)) {
+        var it = Toybox.SensorHistory.getHeartRateHistory({
+          :period => new Toybox.Time.Duration(HR_PERIOD_SEC),
+          :order => Toybox.SensorHistory.ORDER_OLDEST_FIRST
+        });
+        if (it != null) {
+          for (var s = it.next(); s != null; s = it.next()) {
+            if (s.data == null || s.when == null || s.when.value() <= fromSec) {
+              continue;
+            }
+            sum += s.data.toNumber();
+            count += 1;
+            if (s.when.value() > newestSec) { newestSec = s.when.value(); }
+          }
+          done = true;
+        }
+      }
+    } catch (e) {
+      Log.e(TAG, "SensorHistory HR err: " + (e == null ? "NULL" : e.getErrorMessage()));
+    }
+    if (!done) {
+      try {
+        if (Toybox.ActivityMonitor has :getHeartRateHistory) {
+          var it2 = Toybox.ActivityMonitor.getHeartRateHistory(new Toybox.Time.Duration(HR_PERIOD_SEC), false);
+          if (it2 != null) {
+            for (var s2 = it2.next(); s2 != null; s2 = it2.next()) {
+              var v = s2.heartRate;
+              if (v == null || v == Toybox.ActivityMonitor.INVALID_HR_SAMPLE
+                  || s2.when == null || s2.when.value() <= fromSec) {
+                continue;
+              }
+              sum += v;
+              count += 1;
+              if (s2.when.value() > newestSec) { newestSec = s2.when.value(); }
+            }
+          }
+        }
+      } catch (e) {
+        Log.e(TAG, "ActivityMonitor HR err: " + (e == null ? "NULL" : e.getErrorMessage()));
+      }
+    }
+    if (count == 0 || newestSec <= fromSec) {
+      return null;
+    }
+    return [sum / count, newestSec];
   }
 
   // Adds the AAPS key to a request.
@@ -206,6 +277,7 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
 
     sentStepsSec = null;
     sentHrSec = null;
+    sentHrEndSec = null;
     populateSteps(parameters);
     populateHeartRateHistory(parameters);
     parameters["trig"] = trigger;
@@ -237,6 +309,7 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
       }
       if (sentHrSec != null) {
         Toybox.Application.Storage.setValue("LastSentHRSec", sentHrSec);
+        Toybox.Application.Storage.setValue("LastSentHrEndSec", sentHrEndSec);
       }
       Toybox.Application.Storage.deleteValue("PushErr");
     }

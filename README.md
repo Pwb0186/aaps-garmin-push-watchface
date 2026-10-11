@@ -210,10 +210,15 @@ steps are high - so a user must choose to send them.
   activity is started, paused or not yet saved (`Activity.getActivityInfo().timerState`
   above 0, read in the background process - the watch face itself does not run during an
   activity). The activity's steps are then never sent.
-- **Heart rate** is sent when `SendHeartRateToAaps` is true: the view stores a 5-minute
-  average in `Storage` under `HeartRateStartSec`, `HeartRateLastSec` and `HeartRateAvg`
-  (see `sampleHeartRate()` in `PushWatchFaceView.mc`), and the service delegate sends
-  `hr`, `hrStart`, `hrEnd`.
+- **Heart rate** is sent when `SendHeartRateToAaps` is true. The background process reads
+  it just before each request from the watch's heart rate history (about one sample a
+  minute) - `populateHeartRateHistory()` in `Shared/source/GlucoseServiceDelegate.mc`. It
+  sends the average since the last value AAPS accepted (at most 5 minutes) as `hr`, with
+  `hrStart` (the last `hrEnd`) and `hrEnd` (time of the newest sample), so the periods
+  follow on without overlap. The background can read it while an activity runs, when the
+  watch face itself does not run. `PauseHeartRateInActivity` (on by default) holds the
+  heart rate back while an activity is started, paused or not yet saved - a data field in
+  the activity usually sends it then. Turn it off in the watch menu to send it anyway.
 
 AAPS only stores the steps with one of the fork branches above; stock AAPS ignores them.
 **Only one watch should send steps to an AAPS.** AAPS keeps one last total, so a second
@@ -229,7 +234,8 @@ defines both as `false` in `properties.xml`.
 Garmin Connect shows no settings page for a sideloaded `.prg`, so PushWatchFace has an
 on-watch menu (hold the watch face > Customize) for the low and high BG marks used for
 the BG colour and the graph lines, for showing or hiding the heart rate, and for sending
-steps and heart rate to AAPS and for holding steps back during an activity. See `getSettingsView()` in the app class and
+steps and heart rate to AAPS and for holding them back during an activity. See
+`getSettingsView()` in the app class and
 `PushWatchFaceSettings.mc`.
 
 ---
@@ -268,7 +274,7 @@ Request - `GET http://127.0.0.1:28891/get?...`
 | `drained` | first fetch after foreground start | number of waiting messages dropped |
 | `pusherr` | after an error | last `PhoneAppMessageError` code |
 | `steps` | max every 4 min, only if enabled in the watch menu | today's total steps |
-| `hr`, `hrStart`, `hrEnd` | max every 4 min, only if enabled in the watch menu | 5-min average heart rate and its period (epoch sec) |
+| `hr`, `hrStart`, `hrEnd` | max every 4 min, only if enabled in the watch menu | average heart rate since the last one sent (max 5 min) and its period (epoch sec) |
 
 Response (JSON):
 
