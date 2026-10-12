@@ -20,6 +20,10 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
   private var sentHrEndSec as Number? = null;
   // Longest heart rate period sent to AAPS (the watch face used 5 minutes before).
   private static const HR_PERIOD_SEC = 300;
+  // How old the last sent hrEnd may be for the next period to start there. Fetches come
+  // about every 5 min and hrEnd is the newest (whole-minute) sample, so the next period
+  // is usually 5-6 min; after a longer gap it falls back to the last HR_PERIOD_SEC.
+  private static const HR_MAX_GAP_SEC = 600;
   private var staleMessageCount as Number = 0;
   // Diagnostics sent along with /get, so they show up in the phone's logcat
   // (AAPS logs the full request URL) - the watch's own log needs a USB cable.
@@ -167,7 +171,7 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
     }
   }
 
-  // Sends the heart rate since the last one AAPS accepted (at most the last 5 min) as
+  // Sends the heart rate since the last one AAPS accepted (up to 10 min, else 5 min) as
   // "hr" (average), "hrStart" and "hrEnd" (epoch sec), at most every 4 minutes.
   // Read here, just before the request, from the watch's heart rate history (about one
   // sample a minute). The background process can read it - also while an activity
@@ -191,7 +195,7 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
       }
       var fromSec = nowSec - HR_PERIOD_SEC;
       var lastEnd = Toybox.Application.Storage.getValue("LastSentHrEndSec");
-      if (lastEnd instanceof Number && lastEnd > fromSec && lastEnd <= nowSec) {
+      if (lastEnd instanceof Number && lastEnd < nowSec && nowSec - (lastEnd as Number) <= HR_MAX_GAP_SEC) {
         fromSec = lastEnd as Number;
       }
       var hr = readHeartRate(fromSec);
@@ -216,10 +220,12 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
     var count = 0;
     var newestSec = 0;
     var done = false;
+    // Far enough back to cover fromSec (plus one sample interval).
+    var period = Util.nowSec() - fromSec + 60;
     try {
       if ((Toybox has :SensorHistory) && (Toybox.SensorHistory has :getHeartRateHistory)) {
         var it = Toybox.SensorHistory.getHeartRateHistory({
-          :period => new Toybox.Time.Duration(HR_PERIOD_SEC),
+          :period => new Toybox.Time.Duration(period),
           :order => Toybox.SensorHistory.ORDER_OLDEST_FIRST
         });
         if (it != null) {
@@ -240,7 +246,7 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
     if (!done) {
       try {
         if (Toybox.ActivityMonitor has :getHeartRateHistory) {
-          var it2 = Toybox.ActivityMonitor.getHeartRateHistory(new Toybox.Time.Duration(HR_PERIOD_SEC), false);
+          var it2 = Toybox.ActivityMonitor.getHeartRateHistory(new Toybox.Time.Duration(period), false);
           if (it2 != null) {
             for (var s2 = it2.next(); s2 != null; s2 = it2.next()) {
               var v = s2.heartRate;
