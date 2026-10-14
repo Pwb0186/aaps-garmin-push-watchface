@@ -315,9 +315,11 @@ Install by connecting the watch by USB and copying the `.prg` to `GARMIN\APPS`, 
 pick the watch face on the watch. A sideloaded `.prg` can't use an AAPS key (see
 AAPS settings).
 
-The supported devices are listed in `manifest.xml`. The layout is built from system
-fonts and screen size, not fixed pixel positions. It has been tested on a real
-Forerunner 955.
+The supported devices are listed in `manifest.xml`: most round Garmin watches with
+Connect IQ 3.3.1 or newer, plus the square Venu Sq and Venu X1. The layout is built from
+system fonts and screen size, not fixed pixel positions. It has been tested on a real
+Forerunner 955; the other watches build, but have only been checked in the simulator,
+or not at all.
 
 ---
 
