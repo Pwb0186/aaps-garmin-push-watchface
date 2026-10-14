@@ -8,6 +8,11 @@ A minimal Connect IQ watch face that shows AndroidAPS (AAPS) data and gets it wi
 fetches the data itself over HTTP. Use it as a starting point for your own watch face, or
 copy a ready-built `.prg` from the `prg/` folder to your watch to try it.
 
+**Send steps (and heart rate) to AAPS:** hold the watch face → *Customize* → turn on
+*Send steps to AAPS* (and *Send heart rate to AAPS*). Both are off by default. AAPS only
+stores the steps with the Steps or Push+Steps branch of the fork (below). Only one watch
+should send steps to an AAPS.
+
 It shows BG with delta and trend, age of the reading, temporary target, IOB, COB,
 basal / temp basal (LOOP OFF when the loop is off), time/date, a 2-hour BG graph, and
 battery, heart rate and steps. The layout is computed from the watch's own font sizes, so
@@ -237,6 +242,36 @@ watch with a higher total is counted as steps. When you switch watch, wait at le
 `Shared` reads both with `Util.settingOn(key, default)`, which gives the default when the
 property does not exist, so a watch face without these properties keeps working. PushWatchFace
 defines both as `false` in `properties.xml`.
+
+#### How the steps code works
+
+Everything is in `Shared/source/GlucoseServiceDelegate.mc` and runs in the background
+process, just before each `/get` request (`populateSteps()`, called while the request
+parameters are built):
+
+1. **Switched on?** `Util.settingOn("SendStepsToAaps", true)` reads the property. A missing
+   property gives the default, so a watch face without it keeps working. PushWatchFace sets
+   it to `false` in `resources/settings/properties.xml`, and the watch menu
+   (`PushWatchFaceSettings.mc`) switches it on.
+2. **Activity running?** If `PauseStepsInActivity` is on, `isActivityRunning()` reads
+   `Activity.getActivityInfo().timerState`. Above 0 (activity started, paused or not yet
+   saved) no steps are sent. Every call is guarded with `has` checks and `try/catch`; on a
+   device that refuses the call it returns `false`, and the steps are sent as usual.
+3. **At most every 4 minutes:** the time of the last accepted send is kept in `Storage`
+   (`LastSentStepsSec`). Within 240 s nothing is sent.
+4. **Read and send:** `ActivityMonitor.getInfo().steps` (today's total, reset by the watch
+   at midnight) is added as `steps=<total>`.
+5. **Only after AAPS accepted it:** `LastSentStepsSec` is saved only when the answer is
+   HTTP 200, so a failed request is tried again at the next fetch.
+
+The watch sends only the day's total. AAPS (`GarminSteps` in the fork) turns the difference
+from the last total into the 5/10/15/30/60/180-minute windows, handles midnight and a
+counter that drops, and stores nothing over a gap of more than 12 minutes (only a new
+starting point).
+
+To send steps from your own watch face: use `Shared` as it is, add a boolean property
+`SendStepsToAaps` (and optionally `PauseStepsInActivity`) to your `properties.xml`, and give
+the user a way to change it (a watch menu or Connect IQ settings).
 
 ### 9. Optional: settings on the watch
 
