@@ -11,26 +11,34 @@ copy a ready-built `.prg` from the `prg/` folder to your watch to try it.
 It shows BG with delta and trend, age of the reading, temporary target, IOB, COB,
 basal / temp basal (LOOP OFF when the loop is off), time/date, a 2-hour BG graph, and
 battery, heart rate and steps. The layout is computed from the watch's own font sizes, so
-the same code fits every watch in the manifest (240 to 416 px).
+the same code fits every watch in the manifest (round 208 to 466 px, and the square
+Venu Sq and Venu X1).
 
 > **Push and steps need an AAPS build from the fork
-> [Pwb0186/AndroidAPS](https://github.com/Pwb0186/AndroidAPS).** Two branches, both on AAPS
+> [Pwb0186/AndroidAPS](https://github.com/Pwb0186/AndroidAPS).** Three branches on AAPS
 > `4.0.0-beta1`:
 >
 > - [`GarminPush+Steps-V4.0.0-beta1`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush+Steps-V4.0.0-beta1):
 >   push (V2), steps and the extra `/get` fields.
 > - [`GarminSteps-V4.0.0-beta1`](https://github.com/Pwb0186/AndroidAPS/tree/GarminSteps-V4.0.0-beta1):
 >   steps only, no push.
+> - [`GarminPush-V4.0.0-beta1`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush-V4.0.0-beta1):
+>   push (V2) and the extra `/get` fields, no steps.
+>
+> The same three exist on AAPS `dev`, with the same Garmin code:
+> [`GarminPush+Steps-dev`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush+Steps-dev),
+> [`GarminSteps-dev`](https://github.com/Pwb0186/AndroidAPS/tree/GarminSteps-dev) and
+> [`GarminPush-dev`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush-dev).
 >
 > With stock AAPS the watch face still runs, but without push:
 >
-> | | Stock AAPS | Steps branch | Push+Steps branch |
-> |---|---|---|---|
-> | BG, delta, trend, graph, IOB, basal | yes - fetched on the watch's own timer, planned for the next expected reading (about every 5 min, a few seconds after AAPS has it) | yes, same as stock | yes |
-> | Update after a bolus, carbs, temp target or temp basal | at the next timer fetch (up to 5 min) | same as stock | a few seconds (push) |
-> | COB, temporary target, loop status (LOOP OFF) | not sent, so the watch face shows `---` for COB, no TT and no loop on/off info | same as stock | yes |
-> | Steps to AAPS | ignored | yes | yes |
-> | Heart rate to AAPS | yes | yes | yes |
+> | | Stock AAPS | Steps branch | Push branch | Push+Steps branch |
+> |---|---|---|---|---|
+> | BG, delta, trend, graph, IOB, basal | yes - fetched on the watch's own timer, planned for the next expected reading (about every 5 min, a few seconds after AAPS has it) | yes, same as stock | yes | yes |
+> | Update after a bolus, carbs, temp target or temp basal | at the next timer fetch (up to 5 min) | same as stock | a few seconds (push) | a few seconds (push) |
+> | COB, temporary target, loop status (LOOP OFF) | not sent, so the watch face shows `---` for COB, no TT and no loop on/off info | same as stock | yes | yes |
+> | Steps to AAPS | ignored | yes | ignored | yes |
+> | Heart rate to AAPS | yes | yes | yes | yes |
 >
 > The fields an AAPS does not send are simply missing from the answer, and the watch face
 > copes with that - nothing breaks.
@@ -220,7 +228,8 @@ steps are high - so a user must choose to send them.
   heart rate back while an activity is started, paused or not yet saved - a data field in
   the activity usually sends it then. Turn it off in the watch menu to send it anyway.
 
-AAPS only stores the steps with one of the fork branches above; stock AAPS ignores them.
+AAPS only stores the steps with a fork branch that has steps (Steps or Push+Steps); stock AAPS and
+the Push branch ignore them.
 **Only one watch should send steps to an AAPS.** AAPS keeps one last total, so a second
 watch with a higher total is counted as steps. When you switch watch, wait at least
 12 minutes after the last steps were sent, or turn off "Send steps to AAPS" on one of them.
