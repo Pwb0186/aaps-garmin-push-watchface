@@ -21,13 +21,13 @@ Venu Sq and Venu X1).
 
 > **Push and steps need an AAPS build from the fork
 > [Pwb0186/AndroidAPS](https://github.com/Pwb0186/AndroidAPS).** Three branches on AAPS
-> `4.0.0-beta1`:
+> `4.0.0-rc1`:
 >
-> - [`GarminPush+Steps-V4.0.0-beta1`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush+Steps-V4.0.0-beta1):
+> - [`GarminPush+Steps-V4.0.0-rc1`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush+Steps-V4.0.0-rc1):
 >   push (V2), steps and the extra `/get` fields.
-> - [`GarminSteps-V4.0.0-beta1`](https://github.com/Pwb0186/AndroidAPS/tree/GarminSteps-V4.0.0-beta1):
+> - [`GarminSteps-V4.0.0-rc1`](https://github.com/Pwb0186/AndroidAPS/tree/GarminSteps-V4.0.0-rc1):
 >   steps only, no push.
-> - [`GarminPush-V4.0.0-beta1`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush-V4.0.0-beta1):
+> - [`GarminPush-V4.0.0-rc1`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush-V4.0.0-rc1):
 >   push (V2) and the extra `/get` fields, no steps.
 >
 > The same three exist on AAPS `dev`, with the same Garmin code:
