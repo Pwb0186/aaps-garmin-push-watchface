@@ -13,11 +13,25 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
   private static const TAG = "GlucoseServiceDelegate";
   private var key = Properties.getValue("AAPSKey");
   private var httpClient as HttpClient;
+  // Second request for COB on an AAPS without the push fork (see onGetResult).
+  private var sgvClient as HttpClient;
+  private var getResult as Dictionary<String, Object>? = null;
   // Steps/HR are marked as sent only once AAPS has answered 200 (onGetResult), so a
   // request that never reaches the phone does not use up the 4-minute throttle.
   private var sentStepsSec as Number? = null;
   private var sentHrSec as Number? = null;
   private var sentHrEndSec as Number? = null;
+  // Step totals kept on the watch while AAPS cannot be reached, sent afterwards as
+  // "stepsPrev" so AAPS knows when the steps in the gap were taken.
+  //   StepSamples (Storage)  [[sec, total], ...] oldest first, at most MAX_STEP_SAMPLES
+  //   stepsTried             [sec, total] sent as "steps" in this request
+  //   sentStepsPrev          the request carried "stepsPrev"
+  private static const MAX_STEP_SAMPLES = 36;
+  // Background runs come about every 5 min; a sample closer than this to the last one
+  // (e.g. a push right after a timer run) is not kept, so 36 samples cover about 3 h.
+  private static const MIN_STEP_SAMPLE_GAP_SEC = 240;
+  private var stepsTried as Array<Number>? = null;
+  private var sentStepsPrev as Boolean = false;
   // Longest heart rate period sent to AAPS (the watch face used 5 minutes before).
   private static const HR_PERIOD_SEC = 300;
   // How old the last sent hrEnd may be for the next period to start there. Fetches come
@@ -44,6 +58,8 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
     // Same wording for 404 and "never reached the server": for this app the server is
     // AAPS on the phone, so both point at the same fix.
     me.httpClient = new HttpClient(
+        url, "Enable Garmin in AAPS config", "Enable Garmin in AAPS config");
+    me.sgvClient = new HttpClient(
         url, "Enable Garmin in AAPS config", "Enable Garmin in AAPS config");
   }
 
@@ -116,7 +132,49 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
   }
 
   function exitWithResult(result as Dictionary<String, Object>) as Void {
+    registerNextRun();
     Background.exit(result);
+  }
+
+  // How long after this run the background plans the next one itself.
+  private static const NEXT_RUN_SEC = 360;
+
+  // Plans the next timer run from the background process.
+  //
+  // The timer is a one-shot event (a Moment). The foreground plans the next one
+  // (schedule2 in onUpdate, backgroundComplete in onBackgroundData), but during an
+  // activity the watch face is not on the screen, so after one timer run no new one
+  // would be planned and only push fetches would run, with long gaps between fetches.
+  // The foreground also plans only while the phone is connected, so without the phone
+  // the background would not run every 5 min either.
+  //
+  // So every run (timer and push) plans the next one NEXT_RUN_SEC ahead: about 1 min
+  // after the next push is due, like the foreground's fallback. A run that is already
+  // planned within that time is kept. When the watch face is on the screen,
+  // backgroundComplete() replaces this with its own time.
+  // Garmin runs the background only for the selected watch face, so a watch face that
+  // is switched away stops fetching.
+  private function registerNextRun() as Void {
+    try {
+      var nowSec = Util.nowSec();
+      var atSec = nowSec + NEXT_RUN_SEC;
+      var reg = Background.getTemporalEventRegisteredTime();
+      if (reg instanceof Toybox.Time.Moment) {
+        var regSec = (reg as Toybox.Time.Moment).value();
+        if (regSec > nowSec && regSec <= atSec) {
+          return;
+        }
+      }
+      // At least 5 min after the last timer run (Garmin's limit).
+      var last = Background.getLastTemporalEventTime();
+      if (last != null && last.value() + 5 * 60 + 2 > atSec) {
+        atSec = last.value() + 5 * 60 + 2;
+      }
+      Background.registerForTemporalEvent(new Toybox.Time.Moment(atSec));
+      Log.i(TAG, "next run planned in " + (atSec - nowSec) + " s");
+    } catch (e) {
+      Log.e(TAG, "registerNextRun err: " + (e == null ? "NULL" : e.getErrorMessage()));
+    }
   }
 
   // Sends today's total step count to AAPS as "steps", at most every 4 minutes.
@@ -124,6 +182,7 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
     // Off unless the watch face enables it (SendStepsToAaps). AAPS loops such as
     // OpenAPS AIMI read the steps and can reduce SMB, so a user must choose this.
     if (!Util.settingOn("SendStepsToAaps", true)) {
+      Toybox.Application.Storage.deleteValue("StepSamples");
       return;
     }
     // Optional: no steps while an activity is running. AAPS then never sees the steps
@@ -144,9 +203,60 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
         Log.i(TAG, "Steps " + info.steps);
         parameters["steps"] = info.steps.toString();
         sentStepsSec = nowSec;
+        stepsTried = [nowSec, info.steps as Number];
+        populateStepsPrev(parameters);
       }
     } catch (e) {
       Log.e(TAG, "populateSteps err: " + (e == null ? "NULL" : e.getErrorMessage()));
+    }
+  }
+
+  // Adds the kept step totals as "stepsPrev=<sec>:<total>,<sec>:<total>,..." (oldest
+  // first). Left out when there are none, which is the normal case.
+  private function populateStepsPrev(parameters as Dictionary<String, String>) as Void {
+    try {
+      var samples = Toybox.Application.Storage.getValue("StepSamples");
+      if (!(samples instanceof Array) || samples.size() == 0) {
+        return;
+      }
+      var s = "";
+      for (var i = 0; i < samples.size(); i++) {
+        var sample = samples[i] as Array<Number>;
+        s += (i > 0 ? "," : "") + sample[0] + ":" + sample[1];
+      }
+      parameters["stepsPrev"] = s;
+      sentStepsPrev = true;
+      Log.i(TAG, "stepsPrev " + samples.size() + " values");
+    } catch (e) {
+      Log.e(TAG, "stepsPrev err: " + (e == null ? "NULL" : e.getErrorMessage()));
+    }
+  }
+
+  // After a failed /get: keeps the step total it tried to send, for "stepsPrev" later.
+  private function keepStepSample() as Void {
+    var tried = stepsTried;
+    if (tried == null) {
+      return;
+    }
+    try {
+      var samples = Toybox.Application.Storage.getValue("StepSamples");
+      if (!(samples instanceof Array)) {
+        samples = [];
+      }
+      if (samples.size() > 0) {
+        var last = samples[samples.size() - 1] as Array<Number>;
+        if (tried[0] - last[0] < MIN_STEP_SAMPLE_GAP_SEC) {
+          return;
+        }
+      }
+      samples.add(tried);
+      if (samples.size() > MAX_STEP_SAMPLES) {
+        samples = samples.slice(samples.size() - MAX_STEP_SAMPLES, null);
+      }
+      Toybox.Application.Storage.setValue("StepSamples", samples);
+      Log.i(TAG, "Step sample kept, " + samples.size() + " values");
+    } catch (e) {
+      Log.e(TAG, "keepStepSample err: " + (e == null ? "NULL" : e.getErrorMessage()));
     }
   }
 
@@ -284,6 +394,8 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
     sentStepsSec = null;
     sentHrSec = null;
     sentHrEndSec = null;
+    stepsTried = null;
+    sentStepsPrev = false;
     populateSteps(parameters);
     populateHeartRateHistory(parameters);
     parameters["trig"] = trigger;
@@ -318,7 +430,56 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
         Toybox.Application.Storage.setValue("LastSentHrEndSec", sentHrEndSec);
       }
       Toybox.Application.Storage.deleteValue("PushErr");
+      // AAPS has the kept values now. Only when this request carried them: a request
+      // without steps (e.g. during an activity) leaves them for the next one.
+      if (sentStepsPrev) {
+        Toybox.Application.Storage.deleteValue("StepSamples");
+      }
+      // Only the push fork sends "loopEnabled" (and "carbsOnBoard") on /get. Without it
+      // - stock AAPS or the steps-only branch - COB comes from /sgv.json instead, in a
+      // second request. Not by a missing "carbsOnBoard": the push fork leaves that out
+      // for a moment while AAPS recalculates COB, and must not cost an extra request.
+      if (!result.hasKey("loopEnabled")) {
+        getResult = result;
+        requestCob();
+        return;
+      }
+    } else {
+      keepStepSample();
     }
+    finish(result);
+  }
+
+  // /sgv.json?count=1&brief_mode=true answers with an array of one entry that has
+  // "cob" (null while AAPS has no COB).
+  private function requestCob() as Void {
+    sgvClient.get("sgv.json", method(:onSgvResult), withKey({ "count" => "1", "brief_mode" => "true" }));
+  }
+
+  function onSgvResult(sgv as Dictionary<String, Object>) as Void {
+    var result = getResult;
+    getResult = null;
+    if (result == null) {
+      return;
+    }
+    try {
+      // Without a COB value "carbsOnBoard" stays out and the watch keeps its last one.
+      if (sgv["httpCode"] == 200) {
+        var list = sgv["message"];
+        if (list instanceof Array && list.size() > 0 && list[0] instanceof Dictionary) {
+          var cob = (list[0] as Dictionary)["cob"];
+          if (cob != null) {
+            result["carbsOnBoard"] = cob;
+          }
+        }
+      }
+    } catch (e) {
+      Log.e(TAG, "sgv cob err: " + (e == null ? "NULL" : e.getErrorMessage()));
+    }
+    finish(result);
+  }
+
+  private function finish(result as Dictionary<String, Object>) as Void {
     if (resultCallback != null) {
       resultCallback.invoke(result);
     }

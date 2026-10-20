@@ -15,6 +15,10 @@ class Graph extends Ui.Drawable {
 
   private var glucoseBarWidthSec as Number = 5 * 60;
   private var glucoseBarPadding as Number = 2;
+  // True when computeOffsetAndWidth() gave the padding to the bars because the graph
+  // is too narrow for both. draw() must then keep it at 0: with the usual 2 px the
+  // dots were spaced wider than the graph and ran out of it on the right (fr255s).
+  private var paddingCollapsed as Boolean = false;
   private var initialXOffset as Number;
   private var initialWidth as Number;
   private var glucoseBarWidth as Number = 3;
@@ -79,9 +83,11 @@ class Graph extends Ui.Drawable {
     var w = initialWidth - rightOffset;
     var valueWidth = Math.ceil((w + glucoseBarPadding) / valueCount().toDouble()).toNumber();
     glucoseBarWidth = valueWidth - glucoseBarPadding;
+    paddingCollapsed = false;
     if (glucoseBarWidth <= glucoseBarPadding) {
       glucoseBarWidth += glucoseBarPadding;
       glucoseBarPadding = 0;
+      paddingCollapsed = true;
       glucoseBarWidth = Util.max(1, glucoseBarWidth);
     }
     var width = valueWidth * valueCount() - glucoseBarPadding;
@@ -189,7 +195,7 @@ class Graph extends Ui.Drawable {
   function draw(dc as Gfx.Dc) as Void {
     if (!isVisible) { return; }
     glucoseBarWidthSec = Data.getGlucoseValueFrequencySeq();
-    glucoseBarPadding = glucoseBarWidthSec < 300 ? 0 : 2;
+    glucoseBarPadding = (glucoseBarWidthSec < 300 || paddingCollapsed) ? 0 : 2;
     if (glucoseBuffer.size() == 0) {
       return;
     }

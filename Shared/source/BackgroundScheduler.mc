@@ -182,9 +182,27 @@ module BackgroundScheduler {
     return nextRunTimeSec;
   }
 
+  // After every background result. The background process has already planned a run
+  // about 6 min ahead (GlucoseServiceDelegate.registerNextRun). While the phone is
+  // connected that is replaced right away with the time computed here (the same time
+  // schedule2 would otherwise register within the next minute), so the timing does not
+  // change while the watch face is on the screen. Without the phone the background's
+  // run is kept.
   function backgroundComplete(lastDateSec as Number?) as Void {
     registered = false;
-    nextScheduleTimeSec = scheduleTime(Util.nowSec(), lastDateSec);
+    var nowSec = Util.nowSec();
+    nextScheduleTimeSec = scheduleTime(nowSec, lastDateSec);
+    try {
+      if (System.getDeviceSettings().phoneConnected) {
+        var atSec = Util.max(nextScheduleTimeSec as Number, nowSec + 1);
+        Background.registerForTemporalEvent(new Time.Moment(atSec));
+        registered = true;
+        nextScheduleTimeSec = atSec;
+        Log.i(TAG, "complete: registered event at " + Util.timeSecToString(atSec));
+      }
+    } catch (e) {
+      Log.e(TAG, "complete ex: " + e.getErrorMessage());
+    }
   }
 
   function schedule2(lastDateSec, scheduleWithinSec) {

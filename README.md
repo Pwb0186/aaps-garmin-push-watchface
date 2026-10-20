@@ -41,7 +41,8 @@ Venu Sq and Venu X1).
 > |---|---|---|---|---|
 > | BG, delta, trend, graph, IOB, basal | yes - fetched on the watch's own timer, planned for the next expected reading (about every 5 min, a few seconds after AAPS has it) | yes, same as stock | yes | yes |
 > | Update after a bolus, carbs, temp target or temp basal | at the next timer fetch (up to 5 min) | same as stock | a few seconds (push) | a few seconds (push) |
-> | COB, temporary target, loop status (LOOP OFF) | not sent, so the watch face shows `---` for COB, no TT and no loop on/off info | same as stock | yes | yes |
+> | COB | from `/sgv.json`, one extra request per fetch | same as stock | yes | yes |
+> | Temporary target, loop status (LOOP OFF) | not sent, so no TT and no loop on/off info | same as stock | yes | yes |
 > | Steps to AAPS | ignored | yes | ignored | yes |
 > | Heart rate to AAPS | yes | yes | yes | yes |
 >
@@ -95,6 +96,13 @@ AAPS (phone)                                     Watch
   pushes stop, the fallback still runs at +60 s, about every 5 minutes. When no push has
   come for 15 minutes (about three readings), it moves to 5 s after the expected BG, i.e.
   plain polling every 5 minutes.
+- **The background plans its next fetch itself.** The timer is a one-shot event, and the
+  watch face plans it only while it is on the screen and the phone is connected. So every
+  background run (timer and push) also plans the next one, about 6 minutes ahead. The
+  watch face then keeps fetching during an activity (the activity has the screen) and
+  keeps trying without the phone. While the watch face is on the screen and the phone is
+  connected, its own time replaces that one. Garmin only runs the background of the
+  selected watch face, so a watch face that is switched away does not fetch.
 
 ---
 
@@ -263,11 +271,19 @@ parameters are built):
    at midnight) is added as `steps=<total>`.
 5. **Only after AAPS accepted it:** `LastSentStepsSec` is saved only when the answer is
    HTTP 200, so a failed request is tried again at the next fetch.
+6. **Kept while AAPS can't be reached:** when a `/get` with steps gets no HTTP 200 (no
+   phone, AAPS or its Garmin plugin off), the total and its time are kept in `Storage`
+   (`StepSamples`, at most 36, at least 240 s apart - about 3 hours). The next `/get`
+   with steps also sends them as `stepsPrev=<sec>:<total>,<sec>:<total>,...` (oldest
+   first), and they are deleted when that request gets HTTP 200. They are also deleted
+   when *Send steps to AAPS* is off. Only an AAPS from the fork's steps branches with this
+   change uses `stepsPrev`, so the steps in the gap get their own time; an older AAPS
+   ignores the field.
 
 The watch sends only the day's total. AAPS (`GarminSteps` in the fork) turns the difference
 from the last total into the 5/10/15/30/60/180-minute windows, handles midnight and a
 counter that drops, and stores nothing over a gap of more than 12 minutes (only a new
-starting point).
+starting point), unless `stepsPrev` fills the gap (item 6).
 
 To send steps from your own watch face: use `Shared` as it is, add a boolean property
 `SendStepsToAaps` (and optionally `PauseStepsInActivity`) to your `properties.xml`, and give
@@ -318,6 +334,7 @@ Request - `GET http://127.0.0.1:28891/get?...`
 | `drained` | first fetch after foreground start | number of waiting messages dropped |
 | `pusherr` | after an error | last `PhoneAppMessageError` code |
 | `steps` | max every 4 min, only if enabled in the watch menu | today's total steps |
+| `stepsPrev` | with `steps`, only after requests that failed | totals kept on the watch while AAPS could not be reached, `<sec>:<total>,...` oldest first (epoch sec); ignored by an AAPS without this change |
 | `hr`, `hrStart`, `hrEnd` | max every 4 min, only if enabled in the watch menu | average heart rate since the last one sent (max 10 min) and its period (epoch sec) |
 
 Response (JSON):
@@ -326,7 +343,7 @@ Response (JSON):
 |---|---|
 | `encodedGlucose` | last ~2 h of BG, delta-var encoded pairs (epoch sec, mg/dL) - `Shared.DeltaVarEncoder` |
 | `remainingInsulin`, `remainingBasalInsulin` | bolus IOB and basal IOB (U); total IOB is the sum of the two |
-| `carbsOnBoard` | COB (g). **Left out while AAPS recalculates** - keep the last value then |
+| `carbsOnBoard` | COB (g). **Left out while AAPS recalculates** - keep the last value then. Sent by the push branches only: when the answer has no `loopEnabled` (stock AAPS, steps branch), `Shared` asks `/sgv.json?count=1&brief_mode=true` for `cob` in a second request (`onGetResult` in `GlucoseServiceDelegate.mc`) |
 | `temporaryBasalRate` | running temp basal as a fraction of the profile basal (`1.0` = 100 %, `0.0` = zero temp). Left out when no temp basal runs |
 | `temporaryTargetActive` | `true`/`false`; when true also `temporaryTargetLow`, `temporaryTargetHigh` (mg/dL), `temporaryTargetReason`, `temporaryTargetEndSec`, `temporaryTargetDurationMin` |
 | `lowGlucoseMark`, `highGlucoseMark` | low and high mark from the AAPS Overview settings (mg/dL); left out when 0. PushWatchFace does not use them - it has its own marks (item 9) |
