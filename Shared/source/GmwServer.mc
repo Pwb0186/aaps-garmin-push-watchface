@@ -170,6 +170,7 @@ class GmwServer {
       data as Data) as Void {
     var code = result["httpCode"];
     Log.i(TAG, "onBackgroundData " + Util.ifNull(code, -1).toString());
+    var bleTimeouts = countBleTimeouts(code);
     try {
       if (code == 200) {
        data.onAapsContact();
@@ -179,6 +180,8 @@ class GmwServer {
        // again ("no value").
        data.onError(null);
        onData(result, data);
+      } else if (bleTimeouts == 1) {
+        Log.i(TAG, "Single BLE timeout, not shown");
       } else {
         data.onError(result["errorMessage"]);
       }
@@ -187,6 +190,23 @@ class GmwServer {
       e.printStackTrace();
       data.onError(e.getErrorMessage());
     }
+  }
+
+  // Counts BLE timeouts (BLE_HOST_TIMEOUT -2, BLE_SERVER_TIMEOUT -3) in a row; any other
+  // result resets the count. A single timeout happens now and then (mostly on a fetch
+  // right after another one) and the next fetch normally works, so showing it would only
+  // put a false error on the watch. The caller ignores the first one, keeping the data
+  // and error already shown, and only a second timeout in a row is shown.
+  // Kept in Storage, because the watch face can be restarted between two fetches (for
+  // example after an activity), which would reset a member variable.
+  private function countBleTimeouts(code) as Number {
+    var stored = Storage.getValue("BleTimeoutCount");
+    var previous = stored instanceof Number ? stored as Number : 0;
+    var count = (code == -2 || code == -3) ? previous + 1 : 0;
+    if (count != previous) {
+      Storage.setValue("BleTimeoutCount", count);
+    }
+    return count;
   }
 }
 }
