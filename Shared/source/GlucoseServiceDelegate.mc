@@ -148,23 +148,19 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
   // The foreground also plans only while the phone is connected, so without the phone
   // the background would not run every 5 min either.
   //
-  // So every run (timer and push) plans the next one NEXT_RUN_SEC ahead: about 1 min
-  // after the next push is due, like the foreground's fallback. A run that is already
-  // planned within that time is kept. When the watch face is on the screen,
-  // backgroundComplete() replaces this with its own time.
+  // So every run (timer and push) plans the next one NEXT_RUN_SEC after now: about 1 min
+  // after the next push is due, like the foreground's fallback. An earlier planned run
+  // is replaced, so the timer only runs when there has been no fetch for that long.
+  // Keeping it would let the timer run in its own rhythm beside push and fetch the same
+  // data again. A push run is not a temporal event, so only timer runs count towards
+  // Garmin's 5 min limit. When the watch face is on the screen, backgroundComplete()
+  // replaces this with its own time (onBackgroundData runs after Background.exit()).
   // Garmin runs the background only for the selected watch face, so a watch face that
   // is switched away stops fetching.
   private function registerNextRun() as Void {
     try {
       var nowSec = Util.nowSec();
       var atSec = nowSec + NEXT_RUN_SEC;
-      var reg = Background.getTemporalEventRegisteredTime();
-      if (reg instanceof Toybox.Time.Moment) {
-        var regSec = (reg as Toybox.Time.Moment).value();
-        if (regSec > nowSec && regSec <= atSec) {
-          return;
-        }
-      }
       // At least 5 min after the last timer run (Garmin's limit).
       var last = Background.getLastTemporalEventTime();
       if (last != null && last.value() + 5 * 60 + 2 > atSec) {
