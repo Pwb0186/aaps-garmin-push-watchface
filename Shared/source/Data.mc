@@ -311,8 +311,10 @@ class Data {
     }
     me.remainingInsulin = remainingInsulin;
     me.remainingBasalInsulin = remainingBasalInsulin;
-    Properties.setValue("RemainingInsulin", remainingInsulin);
-    Properties.setValue("RemainingBasalInsulin", remainingBasalInsulin);
+    // AAPS may leave a field out, and Properties.setValue() does not accept null
+    // (it throws, so the rest of the answer would be lost). 0 matches clearRuntimeValues().
+    Properties.setValue("RemainingInsulin", remainingInsulin == null ? 0 : remainingInsulin);
+    Properties.setValue("RemainingBasalInsulin", remainingBasalInsulin == null ? 0 : remainingBasalInsulin);
   }
 
   function getRemainingInsulinStr() as String {
