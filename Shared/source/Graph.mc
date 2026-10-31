@@ -4,6 +4,7 @@ using Shared.Log;
 using Shared.Util;
 using Toybox.Graphics as Gfx;
 using Toybox.System as Sys;
+using Toybox.Time;
 using Toybox.WatchUi as Ui;
 
 module Shared {
@@ -29,11 +30,23 @@ class Graph extends Ui.Drawable {
   private var glucoseBuffer as Shared.DateValues = new Shared.DateValues(null, 2);
   private var maxGlucose as Number = 0;
   private var circular as Boolean;
+  var isMmolL as Boolean?;
+
+  private var bgColor as Number = Gfx.COLOR_BLACK;
+  private var axisColor as Number = Gfx.COLOR_LT_GRAY;
+  private var lowGlucoseColor = 0;
+  private var lowGlucoseHighlightColor = 0;
+  private var normalGlucoseColor = 0;
+  private var normalGlucoseHighlightColor = 0;
+  private var highGlucoseColor = 0;
+  private var highGlucoseHighlightColor = 0;
+  private var minMaxYOffset = -25;
 
   function initialize(params as  {
         :x as Number, :identifier as Object,
         :locX as Numeric, :locY as Numeric,
         :width as Numeric, :height as Numeric,
+        :minMaxYOffset as Numeric,
         :roundEdgeOffset as Boolean,
         :visible as Boolean }) {
     Drawable.initialize(params);
@@ -47,10 +60,38 @@ class Graph extends Ui.Drawable {
     me.initialWidth = params.get(:width) as Number;
     me.width = initialWidth;
     me.height = (params.get(:height) as Number) - 8;
+    me.minMaxYOffset = Util.ifNullNumber(params.get(:minMaxYOffset), -25);
+    setAppearanceLight();
+  }
+
+  function setOverride(override as Shared.Override) {
+    me.minMaxYOffset += override.getInt("graph", "addMinMaxYOffset", 0);
   }
 
   function valueCount() as Number {
     return TIME_RANGE_SEC / glucoseBarWidthSec;
+  }
+
+  function setAppearanceLight() as Void {
+    bgColor = Gfx.COLOR_WHITE;
+    axisColor = Gfx.COLOR_LT_GRAY;
+    lowGlucoseColor = Gfx.COLOR_RED;
+    lowGlucoseHighlightColor = Gfx.COLOR_DK_RED;
+    normalGlucoseColor = 0x55FF55;
+    normalGlucoseHighlightColor = Gfx.COLOR_DK_GREEN;
+    highGlucoseColor = 0xFFFF55;
+    highGlucoseHighlightColor = 0xFFFF00;
+  }
+
+  function setAppearanceDark() as Void {
+    bgColor = Gfx.COLOR_BLACK;
+    axisColor = Gfx.COLOR_DK_GRAY;
+    lowGlucoseColor = Gfx.COLOR_DK_RED;
+    lowGlucoseHighlightColor = Gfx.COLOR_RED;
+    normalGlucoseColor = Gfx.COLOR_DK_GREEN;
+    normalGlucoseHighlightColor = Gfx.COLOR_GREEN;
+    highGlucoseColor = Gfx.COLOR_YELLOW;
+    highGlucoseHighlightColor = 0xFFFFAA;
   }
 
   private function computeFirstIndex(startSec as Number) as Void {

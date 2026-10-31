@@ -2,6 +2,10 @@ import Toybox.Lang;
 
 using Toybox.Application.Properties;
 using Toybox.Application.Storage;
+using Toybox.FitContributor;
+using Toybox.System;
+using Toybox.Time;
+using Toybox.WatchUi as Ui;
 
 module Shared {
 class GmwServer {
@@ -106,7 +110,8 @@ class GmwServer {
       valueOrNull(msg, "temporaryTargetReason"),
       valueOrNull(msg, "temporaryTargetEndSec"),
       valueOrNull(msg, "temporaryTargetDurationMin"));
-    // "profile" is also sent by AAPS (for older watch faces); not shown here.
+    // Note: "profile" field is sent by AAPS for backward compat with old watch faces
+    // but the new V2 watch face does not display profile - no setProfile() here.
     if (msg["glucoseUnit"] != null && "mmoll".equals(msg["glucoseUnit"])) {
       data.setGlucoseUnit(Data.mmoll);
     } else {
@@ -139,8 +144,9 @@ class GmwServer {
       return;
     }
     var channel = result["channel"];
-    // Only the "http" channel is possible in V2: onPhoneAppMessage2 always calls
-    // requestBloodGlucose(), which routes through HttpClient (channel="http").
+    // Only "http" channel is possible in V2: onPhoneAppMessage2 always calls
+    // requestBloodGlucose() which routes through HttpClient (channel="http").
+    // The "phoneApp" branch was dead code and has been removed (M8/M12).
     if ("http".equals(channel)) {
       saveAapsKey(result);
       onHttpData(result, data);
@@ -156,6 +162,7 @@ class GmwServer {
 
   // Saves the key a fetch used once AAPS has accepted it (HTTP 200). The background
   // process cannot write Properties, so a key that came with a push is saved here.
+  (:watchface)
   private function saveAapsKey(result as Dictionary<String, Object>) as Void {
     var newKey = result["aapsKey"];
     if (result["httpCode"] == 200 && newKey instanceof String
@@ -163,6 +170,11 @@ class GmwServer {
       Properties.setValue("AAPSKey", newKey);
       Log.i(TAG, "AAPS key from push saved");
     }
+  }
+
+  // The data field gets no push, so no key arrives this way.
+  (:datafield)
+  private function saveAapsKey(result as Dictionary<String, Object>) as Void {
   }
 
   function onHttpData(
@@ -199,6 +211,7 @@ class GmwServer {
   // and error already shown, and only a second timeout in a row is shown.
   // Kept in Storage, because the watch face can be restarted between two fetches (for
   // example after an activity), which would reset a member variable.
+  (:watchface)
   private function countBleTimeouts(code) as Number {
     var stored = Storage.getValue("BleTimeoutCount");
     var previous = stored instanceof Number ? stored as Number : 0;
@@ -207,6 +220,13 @@ class GmwServer {
       Storage.setValue("BleTimeoutCount", count);
     }
     return count;
+  }
+
+  // The data field shows every error at once: it fetches again within 30 s
+  // (ForegroundFetcher), so a single timeout is not up for long.
+  (:datafield)
+  private function countBleTimeouts(code) as Number {
+    return 0;
   }
 }
 }

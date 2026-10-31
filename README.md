@@ -8,9 +8,11 @@ A minimal Connect IQ watch face that shows AndroidAPS (AAPS) data and gets it wi
 fetches the data itself over HTTP. Use it as a starting point for your own watch face, or
 copy a ready-built `.prg` from the `prg/` folder to your watch to try it.
 
+![AAPS Push Watch Face on a Forerunner 955](pushwatchface.png)
+
 **Send steps (and heart rate) to AAPS:** hold the watch face → *Customize* → turn on
 *Send steps to AAPS* (and *Send heart rate to AAPS*). Both are off by default. AAPS only
-stores the steps with the Steps or Push+Steps branch of the fork (below). Only one watch
+stores the steps with the Push+Steps branch of the fork (below). Only one watch
 should send steps to an AAPS.
 
 It shows BG with delta and trend, age of the reading, temporary target, IOB, COB,
@@ -20,31 +22,26 @@ the same code fits every watch in the manifest (round 208 to 466 px, and the squ
 Venu Sq and Venu X1).
 
 > **Push and steps need an AAPS build from the fork
-> [Pwb0186/AndroidAPS](https://github.com/Pwb0186/AndroidAPS).** Three branches on AAPS
-> `4.0.0-rc1`:
+> [Pwb0186/AndroidAPS](https://github.com/Pwb0186/AndroidAPS)**, branch
+> [`GarminPush+Steps-V4.0.0-rc1`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush+Steps-V4.0.0-rc1)
+> (on AAPS `4.0.0-rc1`) or
+> [`GarminPush+Steps-dev`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush+Steps-dev)
+> (on AAPS `dev`, same Garmin code): push (V2), steps and the extra `/get` fields.
 >
-> - [`GarminPush+Steps-V4.0.0-rc1`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush+Steps-V4.0.0-rc1):
->   push (V2), steps and the extra `/get` fields.
-> - [`GarminSteps-V4.0.0-rc1`](https://github.com/Pwb0186/AndroidAPS/tree/GarminSteps-V4.0.0-rc1):
->   steps only, no push.
-> - [`GarminPush-V4.0.0-rc1`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush-V4.0.0-rc1):
->   push (V2) and the extra `/get` fields, no steps.
->
-> The same three exist on AAPS `dev`, with the same Garmin code:
-> [`GarminPush+Steps-dev`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush+Steps-dev),
-> [`GarminSteps-dev`](https://github.com/Pwb0186/AndroidAPS/tree/GarminSteps-dev) and
-> [`GarminPush-dev`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush-dev).
+> [`GarminPush+Steps+Control-V4.0.0-rc1`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush+Steps+Control-V4.0.0-rc1)
+> has the same push and steps, plus the commands for the
+> [AAPS Control widget](https://github.com/Pwb0186/aaps-garmin-control-widget); this watch face works with it too.
 >
 > With stock AAPS the watch face still runs, but without push:
 >
-> | | Stock AAPS | Steps branch | Push branch | Push+Steps branch |
-> |---|---|---|---|---|
-> | BG, delta, trend, graph, IOB, basal | yes - fetched on the watch's own timer, planned for the next expected reading (about every 5 min, a few seconds after AAPS has it) | yes, same as stock | yes | yes |
-> | Update after a bolus, carbs, temp target or temp basal | at the next timer fetch (up to 5 min) | same as stock | a few seconds (push) | a few seconds (push) |
-> | COB | from `/sgv.json`, one extra request per fetch | same as stock | yes | yes |
-> | Temporary target, loop status (LOOP OFF) | not sent, so no TT and no loop on/off info | same as stock | yes | yes |
-> | Steps to AAPS | ignored | yes | ignored | yes |
-> | Heart rate to AAPS | yes | yes | yes | yes |
+> | | Stock AAPS | Push+Steps branch |
+> |---|---|---|
+> | BG, delta, trend, graph, IOB, basal | yes - fetched on the watch's own timer, planned for the next expected reading (about every 5 min, a few seconds after AAPS has it) | yes |
+> | Update after a bolus, carbs, temp target or temp basal | at the next timer fetch (up to 5 min) | a few seconds (push) |
+> | COB | from `/sgv.json`, one extra request per fetch | yes |
+> | Temporary target, loop status (LOOP OFF) | not sent, so no TT and no loop on/off info | yes |
+> | Steps to AAPS | ignored | yes |
+> | Heart rate to AAPS | yes | yes |
 >
 > The fields an AAPS does not send are simply missing from the answer, and the watch face
 > copes with that - nothing breaks.
@@ -215,9 +212,11 @@ class MyWatchFaceApp extends Application.AppBase {
 project.manifest = manifest.xml
 base.sourcePath = source;../Shared/source
 base.resourcePath = resources;../Shared/resources
+base.excludeAnnotations = datafield
 ```
 
-`Shared/resources` adds the `AAPSKey` setting and the properties `Shared` uses. Your own
+`base.excludeAnnotations = datafield` leaves out the code in `Shared` that only a data
+field uses (see [Developer notes](#developer-notes)). `Shared/resources` adds the `AAPSKey` setting and the properties `Shared` uses. Your own
 `resources/settings/properties.xml` is merged with it.
 
 ### 8. Optional: heart rate and steps to AAPS
@@ -241,8 +240,7 @@ steps are high - so a user must choose to send them.
   heart rate back while an activity is started, paused or not yet saved - a data field in
   the activity usually sends it then. Turn it off in the watch menu to send it anyway.
 
-AAPS only stores the steps with a fork branch that has steps (Steps or Push+Steps); stock AAPS and
-the Push branch ignore them.
+AAPS only stores the steps with the fork's Push+Steps branch; stock AAPS ignores them.
 **Only one watch should send steps to an AAPS.** AAPS keeps one last total, so a second
 watch with a higher total is counted as steps. When you switch watch, wait at least
 12 minutes after the last steps were sent, or turn off "Send steps to AAPS" on one of them.
@@ -276,7 +274,7 @@ parameters are built):
    (`StepSamples`, at most 36, at least 240 s apart - about 3 hours). The next `/get`
    with steps also sends them as `stepsPrev=<sec>:<total>,<sec>:<total>,...` (oldest
    first), and they are deleted when that request gets HTTP 200. They are also deleted
-   when *Send steps to AAPS* is off. Only an AAPS from the fork's steps branches with this
+   when *Send steps to AAPS* is off. Only an AAPS from the fork's Push+Steps branch with this
    change uses `stepsPrev`, so the steps in the gap get their own time; an older AAPS
    ignores the field.
 
@@ -305,7 +303,7 @@ steps and heart rate to AAPS and for holding them back during an activity. See
 In AAPS: *Configuration -> Communication -> Garmin*, enable it, and in its settings
 enable the **local HTTP server** (port 28891 by default - the watch uses that port).
 
-**AAPS key** (optional, set in the same AAPS settings):
+**AAPS key** (optional, **Request Key** in the same AAPS settings):
 
 - **No key in AAPS:** everything works, also with a sideloaded `.prg`.
 - **With a key:** enter the same key in the watch face's settings in the Garmin Connect
@@ -316,8 +314,8 @@ enable the **local HTTP server** (port 28891 by default - the watch uses that po
 - **Key changed in AAPS later:** with the Push+Steps branch the key does not have to be
   entered again on the watch. AAPS sends the new key with a push at once (and with every
   new BG), and the watch face saves it when a fetch with it is accepted. This only works
-  if the watch face fetched data within the 15 minutes before the change. With the steps
-  branch or stock AAPS there is no push, so the key must be entered again.
+  if the watch face fetched data within the 15 minutes before the change. With stock AAPS
+  there is no push, so the key must be entered again.
 
 ---
 
@@ -343,7 +341,7 @@ Response (JSON):
 |---|---|
 | `encodedGlucose` | last ~2 h of BG, delta-var encoded pairs (epoch sec, mg/dL) - `Shared.DeltaVarEncoder` |
 | `remainingInsulin`, `remainingBasalInsulin` | bolus IOB and basal IOB (U); total IOB is the sum of the two |
-| `carbsOnBoard` | COB (g). **Left out while AAPS recalculates** - keep the last value then. Sent by the push branches only: when the answer has no `loopEnabled` (stock AAPS, steps branch), `Shared` asks `/sgv.json?count=1&brief_mode=true` for `cob` in a second request (`onGetResult` in `GlucoseServiceDelegate.mc`) |
+| `carbsOnBoard` | COB (g). **Left out while AAPS recalculates** - keep the last value then. Sent by the Push+Steps branch only: when the answer has no `loopEnabled` (stock AAPS), `Shared` asks `/sgv.json?count=1&brief_mode=true` for `cob` in a second request (`onGetResult` in `GlucoseServiceDelegate.mc`) |
 | `temporaryBasalRate` | running temp basal as a fraction of the profile basal (`1.0` = 100 %, `0.0` = zero temp). Left out when no temp basal runs |
 | `temporaryTargetActive` | `true`/`false`; when true also `temporaryTargetLow`, `temporaryTargetHigh` (mg/dL), `temporaryTargetReason`, `temporaryTargetEndSec`, `temporaryTargetDurationMin` |
 | `lowGlucoseMark`, `highGlucoseMark` | low and high mark from the AAPS Overview settings (mg/dL); left out when 0. PushWatchFace does not use them - it has its own marks (item 9) |
@@ -361,19 +359,26 @@ manifest (`PushWatchFace-<device>.prg`). Copy the one for your watch to `GARMIN\
 (see below) and pick "AAPS Push" as the watch face. To change anything, build it
 yourself.
 
-Requirements: Connect IQ SDK (built with 9.2.0; `minSdkVersion` 3.3.1) and a developer
-key (SDK Manager / VS Code: "Generate a Developer Key").
+Requirements: Connect IQ SDK (built with 9.2.0; `minSdkVersion` 3.3.1) and a Connect IQ
+developer key (SDK Manager / VS Code: "Generate a Developer Key").
+
+**Command line**, from the repository root:
 
 ```
-monkeyc -o PushWatchFace/bin/PushWatchFace.prg -f PushWatchFace/monkey.jungle -y developer_key -d fr955 -w -r
+monkeyc -o PushWatchFace/bin/PushWatchFace.prg -f PushWatchFace/monkey.jungle -y <your developer key> -d <device> -w -r
 ```
 
-`-r` makes a release build without the log output from `Shared/Log.mc`. Leave it out
-when you want to read the log: create an empty `GARMIN\APPS\LOGS\PushWatchFace.TXT`
-on the watch, and the log is written there.
+`<device>` is a device id from `PushWatchFace/manifest.xml`, for example `fr955`. `-r`
+makes a release build without the log output from `Shared/Log.mc`. Leave it out when
+you want to read the log: create an empty `GARMIN\APPS\LOGS\PushWatchFace.TXT` on the
+watch, and the log is written there.
 
-Install by connecting the watch by USB and copying the `.prg` to `GARMIN\APPS`, then
-pick the watch face on the watch. A sideloaded `.prg` can't use an AAPS key (see
+**VS Code:** with the Monkey C extension, open the `PushWatchFace` folder and use
+"Monkey C: Build for Device" (or "Run" for the simulator). The simulator gets no push,
+because push goes through Garmin Connect on the phone.
+
+**Install (sideload):** connect the watch by USB and copy the `.prg` to `GARMIN\APPS`,
+then pick "AAPS Push" as the watch face on the watch. A sideloaded `.prg` can't use an AAPS key (see
 AAPS settings).
 
 The supported devices are listed in `manifest.xml`: most round Garmin watches with
@@ -402,3 +407,27 @@ adb logcat -v time -s GARMIN:V
 | `no answer for ... after 20s, resending` | the watch did not fetch after a push; AAPS sends once more. Occasional is normal |
 | no `/get` at all | local HTTP server off in AAPS, or Garmin Connect not running on the phone |
 | watch shows `--` after the Garmin plugin or AAPS was off for more than 15 min | AAPS only pushes to watch faces that fetched in the last 15 min. The watch fetches again on its own within about 5 min, which re-registers it and restarts push; switch watch face and back to fetch at once |
+
+---
+
+## Developer notes
+
+`Shared` is also used by a private data field, which is short of memory. Code that only
+one side uses is annotated and excluded in `monkey.jungle` (`base.excludeAnnotations`):
+
+| Annotation | Used by | Excluded here |
+|---|---|---|
+| `(:watchface)` | watch faces (push, steps, heart rate from the watch's history, COB from `/sgv.json`, planning the next background run, ...) | no |
+| `(:datafield)` | the data field only (foreground fetch, heart rate from the activity, ...) | yes: `base.excludeAnnotations = datafield` |
+
+Where both sides need a member with different code, there are two versions with the same
+name, one `(:watchface)` and one `(:datafield)`. Keep the `datafield` line in your own
+watch face's `monkey.jungle`, or both versions are compiled and clash.
+
+---
+
+## Credits
+
+`Shared/` is based on Robert Buessow's
+[AAPS Glucose Applications](https://github.com/buessow/garmin) (MIT License). This
+repository is MIT licensed as well; see [LICENSE](LICENSE).

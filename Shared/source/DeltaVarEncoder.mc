@@ -14,7 +14,7 @@ module DeltaVarEncoder {
 
   (:glance)
   function readDelta(
-      data as ByteArray,
+      data as ByteArray, 
       posRef as Array<Number>) as Number or Null {
     if (posRef[0] >= data.size()) { return null; }
 
@@ -25,6 +25,7 @@ module DeltaVarEncoder {
       // past the end, and the caller would never see the end of the data.
       if (posRef[0] >= data.size()) { return null; }
       var byte = data[posRef[0]];
+      // Log.i("enc", "read=" + byte + " r2=" + (byte&0x7f));
       posRef[0]++;
       value = value | ((byte & 0x7f) << i);
       if ((byte & 0x80) == 0) {
@@ -32,11 +33,13 @@ module DeltaVarEncoder {
       }
       i = i + 7;
     }
+    // Log.i("enc", "zz=" + value +" z=" + value.toNumber() + " delta=" + zigzagDecode(value) + " s=" + start);
+
     return zigzagDecode(value).toNumber();
   }
 
   (:glance)
-  function decodeBase64(entrySize as Number, dataBase64 as String)
+  function decodeBase64(entrySize as Number, dataBase64 as String) 
       as Array<Number> {
     var a = [] as Array<Number>;
     if (dataBase64 == null || dataBase64.length() == 0) {

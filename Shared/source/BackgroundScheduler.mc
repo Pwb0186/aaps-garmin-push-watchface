@@ -6,6 +6,7 @@ using Toybox.Background;
 using Toybox.Math;
 using Toybox.System;
 using Toybox.Time;
+using Toybox.Time.Gregorian as Calendar;
 
 module Shared {
 module BackgroundScheduler {
@@ -38,11 +39,19 @@ module BackgroundScheduler {
   // Storage key: time (epoch sec) of the last fetch started by an AAPS push.
   const LAST_PUSH_KEY = "LastPushSec";
 
+  // A fetch without push (the data field, or a watch face whose push has stopped)
+  // must come after AAPS has the new reading. AAPS gets it several seconds after the
+  // CGM timestamp (up to about 25 s with xDrip+), and the background may only run
+  // every 5 minutes, so a fetch at +5 s stays just before the reading and always
+  // shows the previous one.
+  const MIN_READING_WAIT_SEC = 30;
+
   // The phone doesn't get new readings immediately, so add some
   // slack to avoid that we try to get it just before it's available.
   // While push works, wait PUSH_FALLBACK_DELAY_SEC so the push goes first.
   function extraReadingDelay() as Number {
-    var wait = Util.ifNull(Properties.getValue("GlucoseValueWaitSec"), 5) as Number;
+    var wait = Util.max(Util.ifNull(Properties.getValue("GlucoseValueWaitSec"), 5) as Number,
+        MIN_READING_WAIT_SEC);
     return isPushActive() ? Util.max(wait, PUSH_FALLBACK_DELAY_SEC) : wait;
   }
 
@@ -153,7 +162,7 @@ module BackgroundScheduler {
       extraDelaySec -= (Math.floor(extraDelaySec / freq) * freq).toNumber();
       if (extraDelaySec < ACCEPTABLE_EXTRA_DELAY) {
         // We would access the next value ACCEPTABLE_EXTRA_DELAY sec
-        // after it's available. That should be acceptable.
+	      // after it's available. That should be acceptable.
         return nextRunTimeSec;
       } else {
         // Skip glucose readings and get the next immediately, so
@@ -188,6 +197,7 @@ module BackgroundScheduler {
   // schedule2 would otherwise register within the next minute), so the timing does not
   // change while the watch face is on the screen. Without the phone the background's
   // run is kept.
+  (:watchface)
   function backgroundComplete(lastDateSec as Number?) as Void {
     registered = false;
     var nowSec = Util.nowSec();
@@ -203,6 +213,14 @@ module BackgroundScheduler {
     } catch (e) {
       Log.e(TAG, "complete ex: " + e.getErrorMessage());
     }
+  }
+
+  // The data field's background is only the reserve for its foreground fetch:
+  // registering right away here would make it fetch next to the foreground.
+  (:datafield)
+  function backgroundComplete(lastDateSec as Number?) as Void {
+    registered = false;
+    nextScheduleTimeSec = scheduleTime(Util.nowSec(), lastDateSec);
   }
 
   function schedule2(lastDateSec, scheduleWithinSec) {
@@ -249,9 +267,9 @@ module BackgroundScheduler {
     if (nowSec % 10 != 0) { return; }
     Log.i(TAG, "try schedule event at " + Util.momentToString(t));
     if (Background.getTemporalEventRegisteredTime() != null) { return; }
-    // getLastTemporalEventTime() is null until the very first temporal event has
-    // fired, and calling .value() on it then throws. Treat "never run" as "long
-    // enough ago" so the first schedule after a fresh install works.
+    // Kept from the fork: getLastTemporalEventTime() is null until the very first
+    // temporal event has fired, and calling .value() on it then throws. Treat "never
+    // run" as "long enough ago" so the first schedule after a fresh install works.
     var lastRunTime = Background.getLastTemporalEventTime();
     var lastSec = lastRunTime == null ? nowSec - (5 * 60 + 1) : lastRunTime.value();
     Log.i(TAG, "try schedule last " + Util.timeSecToString(lastSec));
@@ -302,6 +320,37 @@ module BackgroundScheduler {
       registered = false;
       nextScheduleTimeSec = null;
     }
+  }
+
+  function registerTemporalEventIfConnectedIn(d) {
+    var runTime = Time.now().add(d);
+    return registerTemporalEventIfConnectedAt(runTime);
+  }
+
+  function registerTemporalEventIfConnectedAt(runTime) {
+    try {
+      var lastRunTime = Background.getLastTemporalEventTime();
+      if (System.getDeviceSettings().phoneConnected &&
+          (lastRunTime == null ||
+           runTime.value() - lastRunTime.value() > 5 * 60)) {
+        if (!registered) {
+          // Kept from the fork: set the flag only after the call succeeded. The
+          // original set it first, so a throw left registered = true with nothing
+          // actually registered - and the scheduler then never retried.
+          Background.registerForTemporalEvent(runTime);
+          registered = true;
+          Log.i(TAG, "registered event at " + Util.momentToString(runTime));
+        }
+        return true;
+      } else {
+        Log.i(TAG, "skip registered event last " + Util.momentToString(lastRunTime));
+      }
+    } catch (e) {
+      Log.e(TAG, "ex: " + e.getErrorMessage());
+      e.printStackTrace();
+    }
+    nextScheduleTimeSec = null;
+    return false;
   }
 }
 }

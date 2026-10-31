@@ -7,8 +7,33 @@ output/
 # monkeyc's work folders, if a build writes them into prg/
 prg/*/
 *.iq
+*.debug.xml
+gen/
+mir/
+internal-mir/
+external-mir/
 
-# Developer keys - never commit
+# Secrets and developer keys - never commit
+Secrets.mc
+developer_key*
 *.der
 *.pem
-developer_key*
+
+# Logs
+*.TXT
+*.log
+logs/
+LOGS/
+
+# Local scripts and notes
+*.ps1
+*.bat
+LAES-MIG.md
+
+# Editor / OS files
+.vscode/
+*.code-workspace
+.project
+desktop.ini
+Thumbs.db
+.DS_Store

@@ -6,13 +6,20 @@ using Toybox.Time;
 module Shared {
 (:background, :glance)
 module Util {
+  var testNowSec as Number? = null;
+
   function nowSec() as Number {
-    return Time.now().value();
+    if (testNowSec == null) {
+      return Time.now().value();
+    } else {
+      return testNowSec;
+    }
   }
 
   // True/false from a boolean property. A missing property (the key is not in the
   // app's properties.xml - getValue throws then) gives dflt, so watch faces without
   // the setting keep their old behaviour.
+  (:watchface)
   function settingOn(key as String, dflt as Boolean) as Boolean {
     try {
       var v = Properties.getValue(key);
@@ -41,6 +48,10 @@ module Util {
   }
 
   function ifNull(a as Object?, b as Object) as Object {
+    return a == null ? b : a;
+  }
+
+  function ifNullNumber(a as Number?, b as Number) as Number {
     return a == null ? b : a;
   }
 

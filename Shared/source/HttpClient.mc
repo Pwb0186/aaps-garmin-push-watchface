@@ -1,6 +1,7 @@
 import Toybox.Lang;
 
 using Toybox.Application.Properties;
+using Toybox.Background;
 using Toybox.Communications as Comm;
 using Toybox.System;
 
@@ -95,10 +96,10 @@ class HttpClient {
     logRequest(methodName, url, parameters);
     try {
       makeWebRequest.invoke(
-          url,
-          parameters,
-          { :method => Comm.HTTP_REQUEST_METHOD_GET },
-          method(:onResult));
+	        url,
+	        parameters,
+	        { :method => Comm.HTTP_REQUEST_METHOD_GET },
+	        method(:onResult));
     } catch (e) {
       e.printStackTrace();
       if (callback != null) {

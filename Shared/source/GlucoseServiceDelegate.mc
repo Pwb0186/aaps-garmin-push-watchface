@@ -8,37 +8,41 @@ using Toybox.System;
 
 module Shared {
 
+// Watch faces and the data field share this class, but the data field is tight on
+// memory and has its own way of fetching (foreground, no push) and of collecting heart
+// rate. Members only one of them uses are annotated (:watchface) or (:datafield); each
+// monkey.jungle excludes the other's annotation, so neither carries the other's code.
 (:background, :glance)
 class GlucoseServiceDelegate extends System.ServiceDelegate {
   private static const TAG = "GlucoseServiceDelegate";
   private var key = Properties.getValue("AAPSKey");
   private var httpClient as HttpClient;
   // Second request for COB on an AAPS without the push fork (see onGetResult).
-  private var sgvClient as HttpClient;
-  private var getResult as Dictionary<String, Object>? = null;
+  (:watchface) private var sgvClient as HttpClient;
+  (:watchface) private var getResult as Dictionary<String, Object>? = null;
   // Steps/HR are marked as sent only once AAPS has answered 200 (onGetResult), so a
   // request that never reaches the phone does not use up the 4-minute throttle.
-  private var sentStepsSec as Number? = null;
+  (:watchface) private var sentStepsSec as Number? = null;
   private var sentHrSec as Number? = null;
-  private var sentHrEndSec as Number? = null;
+  (:watchface) private var sentHrEndSec as Number? = null;
   // Step totals kept on the watch while AAPS cannot be reached, sent afterwards as
   // "stepsPrev" so AAPS knows when the steps in the gap were taken.
   //   StepSamples (Storage)  [[sec, total], ...] oldest first, at most MAX_STEP_SAMPLES
   //   stepsTried             [sec, total] sent as "steps" in this request
   //   sentStepsPrev          the request carried "stepsPrev"
-  private static const MAX_STEP_SAMPLES = 36;
+  (:watchface) private static const MAX_STEP_SAMPLES = 36;
   // Background runs come about every 5 min; a sample closer than this to the last one
   // (e.g. a push right after a timer run) is not kept, so 36 samples cover about 3 h.
-  private static const MIN_STEP_SAMPLE_GAP_SEC = 240;
-  private var stepsTried as Array<Number>? = null;
-  private var sentStepsPrev as Boolean = false;
+  (:watchface) private static const MIN_STEP_SAMPLE_GAP_SEC = 240;
+  (:watchface) private var stepsTried as Array<Number>? = null;
+  (:watchface) private var sentStepsPrev as Boolean = false;
   // Longest heart rate period sent to AAPS (the watch face used 5 minutes before).
-  private static const HR_PERIOD_SEC = 300;
+  (:watchface) private static const HR_PERIOD_SEC = 300;
   // How old the last sent hrEnd may be for the next period to start there. Fetches come
   // about every 5 min and hrEnd is the newest (whole-minute) sample, so the next period
   // is usually 5-6 min; after a longer gap it falls back to the last HR_PERIOD_SEC.
-  private static const HR_MAX_GAP_SEC = 600;
-  private var staleMessageCount as Number = 0;
+  (:watchface) private static const HR_MAX_GAP_SEC = 600;
+  (:watchface) private var staleMessageCount as Number = 0;
   // Diagnostics sent along with /get, so they show up in the phone's logcat
   // (AAPS logs the full request URL) - the watch's own log needs a USB cable.
   //   trig     what started this pull: "push" or "timer"
@@ -53,6 +57,7 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
   //
   // @Param url (String)
   //        URL of the request.
+  (:watchface)
   function initialize(url as String) {
     System.ServiceDelegate.initialize();
     // Same wording for 404 and "never reached the server": for this app the server is
@@ -63,10 +68,18 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
         url, "Enable Garmin in AAPS config", "Enable Garmin in AAPS config");
   }
 
+  // The data field needs no second client: it does not ask /sgv.json for COB.
+  (:datafield)
+  function initialize(url as String) {
+    System.ServiceDelegate.initialize();
+    me.httpClient = new HttpClient(
+        url, "Enable Garmin in AAPS config", "Enable Garmin in AAPS config");
+  }
+
   function onTemporalEvent() as Void {
     // Diagnostics only: REGISTERED does not prove the push channel works - only
     // "AAPS Push received" in onPhoneAppMessage2() does. The channel is renewed on
-    // foreground start (getInitialView() in the watch face's app class).
+    // foreground start (GlucoseWatchFaceApp.getInitialView()).
     Log.i(TAG, "Phone app message registration status: " +
         (Background.getPhoneAppMessageEventRegistered() ? "REGISTERED" : "NOT REGISTERED"));
     drainPhoneAppMessagesOnce();
@@ -88,6 +101,7 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
   // temporal event after it does the work. The flag is cleared BEFORE the attempt,
   // because a Permission Required error cannot be caught - a device that refuses
   // the call then loses one background run, not every one.
+  (:watchface)
   private function drainPhoneAppMessagesOnce() as Void {
     if (Toybox.Application.Storage.getValue("DrainPhoneMessages") != true) {
       return;
@@ -121,23 +135,50 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
     }
   }
 
+  // Nothing to drain in the data field: it never gets phone app messages, and
+  // only init2(), which it does not call, sets the flag.
+  (:datafield)
+  private function drainPhoneAppMessagesOnce() as Void {
+  }
+
+  (:watchface)
   function onStalePhoneAppMessage(msg as Comm.PhoneAppMessage) as Void {
     staleMessageCount++;
     Log.i(TAG, "Stale phone app message dropped (" + staleMessageCount + ")");
   }
 
+  (:watchface)
   function onPhoneAppMessageError(err as Comm.PhoneAppMessageError) as Void {
     Log.e(TAG, "Phone app message error: " + err);
     Toybox.Application.Storage.setValue("PushErr", err as Number);
   }
 
+  (:watchface)
   function exitWithResult(result as Dictionary<String, Object>) as Void {
     registerNextRun();
     Background.exit(result);
   }
 
+  // The data field's background is only the reserve for its foreground fetch, so it
+  // must not plan runs of its own (it would fetch next to the foreground).
+  (:datafield)
+  function exitWithResult(result as Dictionary<String, Object>) as Void {
+    Background.exit(result);
+  }
+
+  // Same request as onTemporalEvent(), for an app that may fetch in the
+  // foreground (the data field, API 5). The answer goes to `callback` instead of
+  // Background.exit(), which only exists in the background process. "fg" in
+  // "trig" tells these requests apart in AAPS's logcat.
+  (:datafield)
+  function requestFromForeground(callback as Method(result as Dictionary<String, Object>) as Void) as Void {
+    key = Properties.getValue("AAPSKey");
+    trigger = "fg";
+    requestBloodGlucose(callback);
+  }
+
   // How long after this run the background plans the next one itself.
-  private static const NEXT_RUN_SEC = 360;
+  (:watchface) private static const NEXT_RUN_SEC = 360;
 
   // Plans the next timer run from the background process.
   //
@@ -157,6 +198,7 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
   // replaces this with its own time (onBackgroundData runs after Background.exit()).
   // Garmin runs the background only for the selected watch face, so a watch face that
   // is switched away stops fetching.
+  (:watchface)
   private function registerNextRun() as Void {
     try {
       var nowSec = Util.nowSec();
@@ -174,7 +216,11 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
   }
 
   // Sends today's total step count to AAPS as "steps", at most every 4 minutes.
+  (:watchface)
   private function populateSteps(parameters as Dictionary<String, String>) as Void {
+    sentStepsSec = null;
+    stepsTried = null;
+    sentStepsPrev = false;
     // Off unless the watch face enables it (SendStepsToAaps). AAPS loops such as
     // OpenAPS AIMI read the steps and can reduce SMB, so a user must choose this.
     if (!Util.settingOn("SendStepsToAaps", true)) {
@@ -192,7 +238,7 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
       // Throttle to at most once every 4 minutes (240 sec) to avoid unnecessary polling
       if (lastSentSteps != null && nowSec - lastSentSteps < 240) {
           Log.i(TAG, "Skipping steps, sent recently");
-          return;
+          return; 
       }
       var info = Toybox.ActivityMonitor.getInfo();
       if (info != null && info.steps != null) {
@@ -209,6 +255,7 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
 
   // Adds the kept step totals as "stepsPrev=<sec>:<total>,<sec>:<total>,..." (oldest
   // first). Left out when there are none, which is the normal case.
+  (:watchface)
   private function populateStepsPrev(parameters as Dictionary<String, String>) as Void {
     try {
       var samples = Toybox.Application.Storage.getValue("StepSamples");
@@ -229,6 +276,7 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
   }
 
   // After a failed /get: keeps the step total it tried to send, for "stepsPrev" later.
+  (:watchface)
   private function keepStepSample() as Void {
     var tried = stepsTried;
     if (tried == null) {
@@ -261,6 +309,7 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
   // activity runs, which the watch face itself cannot (the activity has the screen).
   // Every step is checked and caught: a device that refuses the call gives false, so
   // the steps are sent as usual.
+  (:watchface)
   private function isActivityRunning() as Boolean {
     try {
       if (!(Toybox has :Activity) || !(Toybox.Activity has :getActivityInfo)) {
@@ -283,7 +332,10 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
   // sample a minute). The background process can read it - also while an activity
   // runs, when the watch face itself does not run - so the value is fresh and
   // hrStart follows on from the last hrEnd without overlap.
+  (:watchface)
   private function populateHeartRateHistory(parameters as Dictionary<String, String>) as Void {
+    sentHrSec = null;
+    sentHrEndSec = null;
     if (!Util.settingOn("SendHeartRateToAaps", true)) {
       return;
     }
@@ -321,6 +373,7 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
   // Average heart rate of the samples after fromSec, and the time of the newest one:
   // [average, newestSec], or null without samples (e.g. watch not worn). Uses
   // SensorHistory, and ActivityMonitor's heart rate history if that is not available.
+  (:watchface)
   private function readHeartRate(fromSec as Number) as Array<Number>? {
     var sum = 0;
     var count = 0;
@@ -376,6 +429,42 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
     return [sum / count, newestSec];
   }
 
+  // No steps from the data field: the watch face sends them itself, also during an
+  // activity, and two senders would only add requests.
+  (:datafield)
+  private function populateSteps(parameters as Dictionary<String, String>) as Void {
+  }
+
+  // The data field's heart rate: the activity's own average, which
+  // HeartRateCollector (in the data field) keeps in Storage under these keys.
+  (:datafield)
+  private function populateHeartRateHistory(parameters as Dictionary<String, String>) as Void {
+    sentHrSec = null;
+    try {
+      var nowSec = Util.nowSec();
+      var lastSentHR = Toybox.Application.Storage.getValue("LastSentHRSec");
+      if (lastSentHR != null && nowSec - lastSentHR < 240) {
+          Log.i(TAG, "Skipping HR, sent recently");
+          return;
+      }
+      
+      var startSec = Toybox.Application.Storage.getValue("HeartRateStartSec");
+      var lastSec = Toybox.Application.Storage.getValue("HeartRateLastSec");
+      var avg = Toybox.Application.Storage.getValue("HeartRateAvg");
+      
+      if (startSec != null && lastSec != null && avg != null &&
+          avg > 0 && nowSec - lastSec < 600) {
+        Log.i(TAG, "HR " + avg);
+        parameters["hr"] = avg.toString();
+        parameters["hrStart"] = startSec.toString();
+        parameters["hrEnd"] = lastSec.toString();
+        sentHrSec = nowSec;
+      }
+    } catch (e) {
+      e.printStackTrace();
+    }
+  }
+
   // Adds the AAPS key to a request.
   private function withKey(parameters as Dictionary) as Dictionary {
     parameters["key"] = key;
@@ -387,11 +476,6 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
     // No "from" parameter: AAPS (GarminPlugin.onGetBloodGlucose) ignores it and
     // always returns the last 2 h 9 min, which the 120-min graph needs anyway.
 
-    sentStepsSec = null;
-    sentHrSec = null;
-    sentHrEndSec = null;
-    stepsTried = null;
-    sentStepsPrev = false;
     populateSteps(parameters);
     populateHeartRateHistory(parameters);
     parameters["trig"] = trigger;
@@ -407,6 +491,7 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
     httpClient.get("get", method(:onGetResult), withKey(parameters));
   }
 
+  (:watchface)
   function onGetResult(result as Dictionary<String, Object>) as Void {
     // Tells the UI side what started this fetch (GmwServer.onBackgroundData ->
     // BackgroundScheduler.onPushData), so a pending fallback fetch can be dropped.
@@ -448,10 +533,12 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
 
   // /sgv.json?count=1&brief_mode=true answers with an array of one entry that has
   // "cob" (null while AAPS has no COB).
+  (:watchface)
   private function requestCob() as Void {
     sgvClient.get("sgv.json", method(:onSgvResult), withKey({ "count" => "1", "brief_mode" => "true" }));
   }
 
+  (:watchface)
   function onSgvResult(sgv as Dictionary<String, Object>) as Void {
     var result = getResult;
     getResult = null;
@@ -475,12 +562,33 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
     finish(result);
   }
 
+  (:watchface)
   private function finish(result as Dictionary<String, Object>) as Void {
     if (resultCallback != null) {
       resultCallback.invoke(result);
     }
   }
 
+  (:datafield)
+  function onGetResult(result as Dictionary<String, Object>) as Void {
+    result["trig"] = trigger;
+    if (result["httpCode"] == 200) {
+      if (sentHrSec != null) {
+        Toybox.Application.Storage.setValue("LastSentHRSec", sentHrSec);
+        // Lets the app start a new HR window only when this window was sent: with
+        // fetches more often than every 4 minutes most answers come without HR.
+        result["hrSent"] = true;
+      }
+      Toybox.Application.Storage.deleteValue("PushErr");
+    }
+    if (resultCallback != null) {
+      resultCallback.invoke(result);
+    }
+  }
+
+  // Push only: the data field never registers for phone app messages (no AppId,
+  // so AAPS does not push to it), so it leaves these out.
+  (:watchface)
   function onPhoneAppMessage(msg as Comm.PhoneAppMessage) as Void {
     onPhoneAppMessage2(msg, method(:exitWithResult));
   }
@@ -489,6 +597,7 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
   // The payload only contains the key and "updateWatch" command - the watch
   // ignores the content and immediately fetches full data via HTTP GET (/get).
   // This eliminates the 30-second long-poll connection of the old V1 pull model.
+  (:watchface)
   function onPhoneAppMessage2(
     msg as Comm.PhoneAppMessage,
     callback as Method(result as Dictionary<String, Object>) as Void) as Void {
@@ -496,11 +605,22 @@ class GlucoseServiceDelegate extends System.ServiceDelegate {
       var msgData = msg.data instanceof Dictionary
           ? (msg.data as Dictionary<Object, Object>)
           : { "message" => msg.data };
+      
+      // Only AAPS' V2 wake-up signal starts a fetch; it is the only message AAPS
+      // sends to these app ids. Anything else ends the run at once, without the
+      // callback: that would plan the next timer run (postponing the one already
+      // planned), and the unknown channel makes the foreground ignore the result.
+      if (!"updateWatch".equals(msgData["command"])) {
+        Log.i(TAG, "Phone app message ignored, command " + msgData["command"]);
+        Background.exit({"channel" => "ignored"});
+        return;
+      }
 
       // Used for this fetch; saved by the foreground once AAPS has accepted it
-      // (see onGetResult).
+      // (see onGetResult). Only a real key: anything else would replace a working
+      // key and make this fetch fail with 401.
       var newKey = msgData["key"];
-      if (newKey != null) {
+      if (newKey instanceof String && newKey.length() > 0) {
         key = newKey;
       }
 

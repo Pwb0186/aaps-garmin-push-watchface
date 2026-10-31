@@ -4,11 +4,6 @@ module Shared {
   (:glance)
   module Arrays {
     const TAG = "Arrays";
-    function swap(a as Array, i as Number, j as Number) as Void {
-      var z = a[i];
-      a[i] = a[j];
-      a[j] = z;
-    }
 
     function push(s as Array<Number>, scnt as Number, b as Number, e as Number) as Number {
       if (b < e) {
@@ -30,7 +25,7 @@ module Shared {
       scnt = push(s, scnt, 0, a.size() - 1);
       while (scnt > 0) {
         var b = 0xffff & s[scnt - 1];
-        var e = 0xffff & (s[scnt - 1] >> 16);
+        var e = 0xffff & (s[scnt - 1] >> 16); 
         scnt -= 1;
 
         var i = partition(a, b, e);
@@ -40,19 +35,27 @@ module Shared {
     }
 
     function partition(
-        a as Array,
-        b as Number,
+        a as Array, 
+        b as Number, 
         e as Number) as Number {
       var piv = a[e];
       var i = b - 1;
+      // Swaps written out instead of a swap() call: this runs at the bottom of
+      // a deep call chain (GmwServer -> Data.updateGlucose -> medianDeltaSec),
+      // and one call level less keeps it clear of the watch's stack limit.
+      var z;
       for (var j = b; j < e; j++) {
         if (a[j] < piv) {
           i = i + 1;
-          swap(a, i, j);
+          z = a[i];
+          a[i] = a[j];
+          a[j] = z;
         }
       }
       i = i + 1;
-      swap(a, i, e);
+      z = a[i];
+      a[i] = a[e];
+      a[e] = z;
       return i;
     }
   }

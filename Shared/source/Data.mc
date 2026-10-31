@@ -2,6 +2,8 @@ import Toybox.Lang;
 
 using Shared.Util;
 using Toybox.Application.Properties;
+using Toybox.Time;
+using Toybox.Time.Gregorian as Calendar;
 
 module Shared {
 class Data {
@@ -133,9 +135,15 @@ class Data {
     return hasValue();
   }
 
-  // Returns true iff we have a blood glucose reading.
+  // Returns true iff we have a blood glucose reading. A reading more than 2 min in
+  // the future comes from a wrong phone or CGM clock; it would otherwise count as
+  // fresh for much longer than 16 min, so it is treated as no value.
   function hasValue() as Boolean {
-    return glucoseBuffer.size() > 0 && (Util.nowSec() - glucoseBuffer.getLastDateSec()) < 16 * 60;
+    if (glucoseBuffer.size() == 0) {
+      return false;
+    }
+    var ageSec = Util.nowSec() - glucoseBuffer.getLastDateSec();
+    return ageSec < 16 * 60 && ageSec > -2 * 60;
   }
 
   // Null-safe equality check, used by the setters below to avoid
@@ -352,7 +360,7 @@ class Data {
     var glucose = glucoseBuffer.getLastValue();
     switch (glucoseUnit) {
       case mgdl:
-        return glucose.toString();
+	      return glucose.toString();
       case mmoll:
         glucose = glucose / 18.0;
         return glucose.format("%0.1f");
@@ -389,12 +397,30 @@ class Data {
 
   // Change between the latest two readings (a 5-min delta with a 5-min CGM),
   // not a per-minute rate - hence the name.
+  //
+  // After missed readings the latest two are further apart, and their plain
+  // difference would look like a much faster change (and arrow) than the real one.
+  // From 4 min apart it is therefore scaled to one CGM interval (per 5 min with a
+  // 5-min CGM); readings about one interval apart (within the CGM's normal 30 s
+  // jitter) keep AAPS' exact delta. More than 16 min apart, or closer than 2 min
+  // (half the interval for a faster CGM, whose normal readings are that close),
+  // the two values say too little about the current trend, so there is no delta
+  // and no arrow (null).
   function getGlucoseDelta() {
     if (glucoseBuffer.size() > 1) {
       var last = glucoseBuffer.get(glucoseBuffer.size() - 1);
       var previous = glucoseBuffer.get(glucoseBuffer.size() - 2);
+      var gapSec = last.dateSec - previous.dateSec;
+      var freqSec = getGlucoseValueFrequencySeq();
+      if (gapSec > 16 * 60 || gapSec < Util.min(2 * 60, freqSec / 2)) {
+        return null;
+      }
       // AAPS shows the change between the latest two CGM values.
-      return last.value - previous.value;
+      var delta = last.value - previous.value;
+      if (gapSec >= 4 * 60 && (gapSec > freqSec + 30 || gapSec < freqSec - 30)) {
+        return delta * freqSec.toFloat() / gapSec;
+      }
+      return delta;
     } else {
       return null;
     }

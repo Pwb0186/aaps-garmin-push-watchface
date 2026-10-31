@@ -8,7 +8,7 @@ class DateValues {
 
   (:glance)
   function initialize(
-      values as Array<Number>?,
+      values as Array<Number>?, 
       size as Number) {
     if (values == null) {
       data = new [2*size];
@@ -67,6 +67,15 @@ class DateValues {
   (:glance)
   private function get1(i) as Number {
     return data[(start + i) % data.size()];
+    // if (i < size()) {
+    //   var v = data[(start + i) % data.size()];
+    //   if (v == null) {
+    //     throw new InvalidValueException("i=" + i);
+    //   }
+    //   return v;
+    // } else {
+    //   throw new ValueOutOfBoundsException("i=" + i + " size=" + size());
+    // }
   }
 
   (:glance)

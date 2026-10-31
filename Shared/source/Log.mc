@@ -1,5 +1,6 @@
 import Toybox.Lang;
 
+using Toybox.Lang;
 using Toybox.System as Sys;
 using Toybox.Time as Time;
 using Toybox.Time.Gregorian as Gregorian;
@@ -7,7 +8,7 @@ using Toybox.Time.Gregorian as Gregorian;
 // Logging to System.println - which only reaches a file when
 // GARMIN\APPS\LOGS\<APP>.TXT exists on the watch.
 //
-// Debug builds (monkeyc without -r) log with a timestamp. Release builds (monkeyc -r)
+// Debug builds (monkeyc without -r) log as before. Release builds (monkeyc -r)
 // get the empty versions: no date formatting and no println on every call,
 // which the watch otherwise does all day even when nobody reads the log.
 // (The message string itself is still built by the caller.)
@@ -30,6 +31,11 @@ module Log {
 
   (:background, :glance, :release)
   function log(severity as String, tag as String, message as String) as Void {
+  }
+
+  (:background, :glance)
+  public function v(tag as String, message as String) as Void {
+    log("V", tag, message);
   }
 
   (:background, :glance)
