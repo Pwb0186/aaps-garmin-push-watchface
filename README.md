@@ -12,7 +12,7 @@ copy a ready-built `.prg` from the `prg/` folder to your watch to try it.
 
 **Send steps (and heart rate) to AAPS:** hold the watch face → *Customize* → turn on
 *Send steps to AAPS* (and *Send heart rate to AAPS*). Both are off by default. AAPS only
-stores the steps with the Push+Steps branch of the fork (below). Only one watch
+stores the steps with the fork branch (below). Only one watch
 should send steps to an AAPS.
 
 It shows BG with delta and trend, age of the reading, temporary target, IOB, COB,
@@ -23,18 +23,14 @@ Venu Sq and Venu X1).
 
 > **Push and steps need an AAPS build from the fork
 > [Pwb0186/AndroidAPS](https://github.com/Pwb0186/AndroidAPS)**, branch
-> [`GarminPush+Steps-V4.0.0-rc1`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush+Steps-V4.0.0-rc1)
-> (on AAPS `4.0.0-rc1`) or
-> [`GarminPush+Steps-dev`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush+Steps-dev)
-> (on AAPS `dev`, same Garmin code): push (V2), steps and the extra `/get` fields.
->
-> [`GarminPush+Steps+Control-V4.0.0-rc1`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush+Steps+Control-V4.0.0-rc1)
-> has the same push and steps, plus the commands for the
-> [AAPS Control widget](https://github.com/Pwb0186/aaps-garmin-control-widget); this watch face works with it too.
+> [`GarminPush+Steps+Control-V4.0.0`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush+Steps+Control-V4.0.0)
+> (on AAPS 4.0.0): push (V2), steps, pump status and the extra `/get` fields, plus the
+> commands for the [AAPS Control widget](https://github.com/Pwb0186/aaps-garmin-control-widget)
+> (off until you set a control key).
 >
 > With stock AAPS the watch face still runs, but without push:
 >
-> | | Stock AAPS | Push+Steps branch |
+> | | Stock AAPS | Fork branch |
 > |---|---|---|
 > | BG, delta, trend, graph, IOB, basal | yes - fetched on the watch's own timer, planned for the next expected reading (about every 5 min, a few seconds after AAPS has it) | yes |
 > | Update after a bolus, carbs, temp target or temp basal | at the next timer fetch (up to 5 min) | a few seconds (push) |
@@ -240,7 +236,7 @@ steps are high - so a user must choose to send them.
   heart rate back while an activity is started, paused or not yet saved - a data field in
   the activity usually sends it then. Turn it off in the watch menu to send it anyway.
 
-AAPS only stores the steps with the fork's Push+Steps branch; stock AAPS ignores them.
+AAPS only stores the steps with the fork branch; stock AAPS ignores them.
 **Only one watch should send steps to an AAPS.** AAPS keeps one last total, so a second
 watch with a higher total is counted as steps. When you switch watch, wait at least
 12 minutes after the last steps were sent, or turn off "Send steps to AAPS" on one of them.
@@ -274,7 +270,7 @@ parameters are built):
    (`StepSamples`, at most 36, at least 240 s apart - about 3 hours). The next `/get`
    with steps also sends them as `stepsPrev=<sec>:<total>,<sec>:<total>,...` (oldest
    first), and they are deleted when that request gets HTTP 200. They are also deleted
-   when *Send steps to AAPS* is off. Only an AAPS from the fork's Push+Steps branch with this
+   when *Send steps to AAPS* is off. Only an AAPS from the fork branch with this
    change uses `stepsPrev`, so the steps in the gap get their own time; an older AAPS
    ignores the field.
 
@@ -311,7 +307,7 @@ enable the **local HTTP server** (port 28891 by default - the watch uses that po
   the Connect IQ Store (a beta upload is enough). A sideloaded `.prg` has no settings
   page, so leave the key empty in AAPS. With a missing or wrong key AAPS answers 401, and
   the watch face is never registered for push.
-- **Key changed in AAPS later:** with the Push+Steps branch the key does not have to be
+- **Key changed in AAPS later:** with the fork branch the key does not have to be
   entered again on the watch. AAPS sends the new key with a push at once (and with every
   new BG), and the watch face saves it when a fetch with it is accepted. This only works
   if the watch face fetched data within the 15 minutes before the change. With stock AAPS
@@ -341,7 +337,7 @@ Response (JSON):
 |---|---|
 | `encodedGlucose` | last ~2 h of BG, delta-var encoded pairs (epoch sec, mg/dL) - `Shared.DeltaVarEncoder` |
 | `remainingInsulin`, `remainingBasalInsulin` | bolus IOB and basal IOB (U); total IOB is the sum of the two |
-| `carbsOnBoard` | COB (g). **Left out while AAPS recalculates** - keep the last value then. Sent by the Push+Steps branch only: when the answer has no `loopEnabled` (stock AAPS), `Shared` asks `/sgv.json?count=1&brief_mode=true` for `cob` in a second request (`onGetResult` in `GlucoseServiceDelegate.mc`) |
+| `carbsOnBoard` | COB (g). **Left out while AAPS recalculates** - keep the last value then. Sent by the fork branch only: when the answer has no `loopEnabled` (stock AAPS), `Shared` asks `/sgv.json?count=1&brief_mode=true` for `cob` in a second request (`onGetResult` in `GlucoseServiceDelegate.mc`) |
 | `temporaryBasalRate` | running temp basal as a fraction of the profile basal (`1.0` = 100 %, `0.0` = zero temp). Left out when no temp basal runs |
 | `temporaryTargetActive` | `true`/`false`; when true also `temporaryTargetLow`, `temporaryTargetHigh` (mg/dL), `temporaryTargetReason`, `temporaryTargetEndSec`, `temporaryTargetDurationMin` |
 | `lowGlucoseMark`, `highGlucoseMark` | low and high mark from the AAPS Overview settings (mg/dL); left out when 0. PushWatchFace does not use them - it has its own marks (item 9) |
