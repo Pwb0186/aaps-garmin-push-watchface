@@ -18,8 +18,8 @@ should send steps to an AAPS.
 It shows BG with delta and trend, the age of the reading, temporary target, IOB, COB and
 basal / temp basal. When the loop is off, it shows LOOP OFF. It also shows time/date, a
 2-hour BG graph, battery, heart rate and steps. The layout is computed from the watch's own
-font sizes. So the same code fits every watch in the manifest: round watches from 208 to
-466 px, and the square Venu Sq and Venu X1.
+font sizes. So the same code fits every watch in the manifest: round watches from 218 to
+466 px, and the square Venu Sq Music and Venu X1.
 
 > **Push and steps need an AAPS build from the fork
 > [Pwb0186/AndroidAPS](https://github.com/Pwb0186/AndroidAPS)**, branch
@@ -382,8 +382,9 @@ because push goes through Garmin Connect on the phone.
 then pick "AAPS Push" as the watch face on the watch. A sideloaded `.prg` can't use an AAPS key (see
 AAPS settings).
 
-The supported devices are listed in `manifest.xml`: most round Garmin watches with
-Connect IQ 3.3.1 or newer, plus the square Venu Sq and Venu X1. The layout is built from
+The supported devices are listed in `manifest.xml`: 68 watches. Most are round Garmin
+watches with Connect IQ 3.3.1 or newer, plus the square Venu Sq Music and Venu X1.
+The layout is built from
 system fonts and screen size, not fixed pixel positions. It has been tested on a real
 Forerunner 955. The other watches build, but they have only been checked in the
 simulator, or not at all.
