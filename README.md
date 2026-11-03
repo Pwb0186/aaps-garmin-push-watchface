@@ -26,7 +26,7 @@ font sizes. So the same code fits every watch in the manifest: round watches fro
 > [`GarminPush+Steps+Control-V4.0.0`](https://github.com/Pwb0186/AndroidAPS/tree/GarminPush+Steps+Control-V4.0.0)
 > (on AAPS 4.0.0). This branch adds push (V2), steps, pump status and the extra `/get` fields.
 > It also adds the commands for the [AAPS Control widget](https://github.com/Pwb0186/aaps-garmin-control-widget).
-> These commands are off until you set a control key.
+> These commands are off until you set a **Garmin remote control PIN** in AAPS.
 >
 > With stock AAPS the watch face still runs, but without push:
 >
